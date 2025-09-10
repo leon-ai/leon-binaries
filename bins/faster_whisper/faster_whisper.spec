@@ -5,12 +5,14 @@ import os
 from pathlib import Path
 
 VERSION = '1.0.0'
+PACKAGE_NAME = 'faster_whisper'
+RUN_MAIN_SCRIPT = 'run_faster_whisper.py'
 
 # Get the directory where this spec file is located
-spec_root = Path(__file__).parent.absolute()
+spec_root = os.getcwd()
 
 # Define the main script path
-main_script = spec_root / "faster_whisper.py"
+main_script = os.path.join(spec_root, RUN_MAIN_SCRIPT)
 
 # Analysis configuration
 a = Analysis(
@@ -23,11 +25,11 @@ a = Analysis(
     ],
     hiddenimports=[
         # Core faster-whisper dependencies
-        'faster_whisper',
-        'faster_whisper.transcribe',
-        'faster_whisper.audio',
-        'faster_whisper.utils',
-        'faster_whisper.vad',
+        PACKAGE_NAME,
+        f"{PACKAGE_NAME}.transcribe",
+        f"{PACKAGE_NAME}.audio",
+        f"{PACKAGE_NAME}.utils",
+        f"{PACKAGE_NAME}.vad",
         
         # CTranslate2 dependencies
         'ctranslate2',
@@ -116,7 +118,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='faster_whisper',
+    name=PACKAGE_NAME,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -142,6 +144,6 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='faster_whisper'
+    name=PACKAGE_NAME
 )
 """
