@@ -24,8 +24,33 @@ permissions:
   contents: write
 
 jobs:
+  version:
+    name: Read version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.PYTHON_VERSION }}
+
+      - id: get
+        name: Compute version
+        shell: bash
+        working-directory: ${{ inputs.BINS_DIR }}/${{ inputs.BIN }}
+        run: |
+          ver=$(python -c 'from version import __version__; print(__version__)')
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build ${{ inputs.BIN }} (${{ matrix.arch }})
+    needs: version
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
     strategy:
       fail-fast: false
       matrix:
@@ -69,11 +94,6 @@ jobs:
       - name: Build with PyInstaller via Node script
         run: npm run build ${{ inputs.BIN }}
 
-      - name: Read version
-        shell: bash
-        working-directory: ${{ inputs.BINS_DIR }}/${{ inputs.BIN }}
-        run: echo "VERSION=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_ENV"
-
       - name: Collect binary (no archive)
         shell: bash
         working-directory: ${{ inputs.BINS_DIR }}/${{ inputs.BIN }}
@@ -95,27 +115,13 @@ jobs:
         with:
           name: ${{ inputs.BIN }}_${{ env.VERSION }}-${{ matrix.arch }}
           path: out/*
-          # This only affects the temporary workflow artifact storage, not the final release.
           compression-level: 0
 
   release:
-    name: Release ${{ inputs.BIN }} v${{ env.VERSION }}
-    needs: build
+    name: Release ${{ inputs.BIN }} v${{ needs.version.outputs.version }}
+    needs: [build, version]
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ inputs.PYTHON_VERSION }}
-
-      - name: Read version
-        shell: bash
-        working-directory: ${{ inputs.BINS_DIR }}/${{ inputs.BIN }}
-        run: echo "VERSION=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_ENV"
-
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -125,14 +131,13 @@ jobs:
       - name: List assets
         run: ls -la release_assets
 
-      # Upload each binary as a raw, unpacked asset to the GitHub Release
       - name: Create or update GitHub Release (raw assets)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.BIN }}-v${{ env.VERSION }}
-          name: ${{ inputs.BIN }} v${{ env.VERSION }}
+          tag_name: ${{ inputs.BIN }}-v${{ needs.version.outputs.version }}
+          name: ${{ inputs.BIN }} v${{ needs.version.outputs.version }}
           body: |
-            Automated release for ${{ inputs.BIN }} version ${{ env.VERSION }}.
+            Automated release for ${{ inputs.BIN }} version ${{ needs.version.outputs.version }}.
             Includes raw binaries for multiple architectures.
           files: release_assets/*
           draft: false
