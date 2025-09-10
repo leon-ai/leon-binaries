@@ -23,14 +23,9 @@ concurrency:
 permissions:
   contents: write
 
-env:
-  BIN: ${{ inputs.bin }}
-  BINS_DIR: ${{ inputs.bins_dir }}
-  PYTHON_VERSION: ${{ inputs.python_version }}
-
 jobs:
   build:
-    name: Build ${{ env.BIN }} (${{ matrix.arch }})
+    name: Build ${{ inputs.BIN }} (${{ matrix.arch }})
     strategy:
       fail-fast: false
       matrix:
@@ -65,25 +60,25 @@ jobs:
       - name: Set up Python ${{ matrix.python_arch }}
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: ${{ inputs.PYTHON_VERSION }}
           architecture: ${{ matrix.python_arch }}
 
       - name: Install pipenv
         run: python -m pip install --upgrade pip pipenv
 
       - name: Build with PyInstaller via Node script
-        run: npm run build ${{ env.BIN }}
+        run: npm run build ${{ inputs.BIN }}
 
       - name: Read version
         shell: bash
-        working-directory: ${{ env.BINS_DIR }}/${{ env.BIN }}
+        working-directory: ${{ inputs.BINS_DIR }}/${{ inputs.BIN }}
         run: echo "VERSION=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_ENV"
 
       - name: Collect binary (no archive)
         shell: bash
-        working-directory: ${{ env.BINS_DIR }}/${{ env.BIN }}
+        working-directory: ${{ inputs.BINS_DIR }}/${{ inputs.BIN }}
         env:
-          BIN: ${{ env.BIN }}
+          BIN: ${{ inputs.BIN }}
           ARCH: ${{ matrix.arch }}
         run: |
           EXT=""
@@ -98,5 +93,5 @@ jobs:
       - name: Upload artifact (raw binary)
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.BIN }}_${{ env.VERSION }}-${{ matrix.arch }}
+          name: ${{ inputs.BIN }}_${{ env.VERSION }}-${{ matrix.arch }}
           path: out/*
