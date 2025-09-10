@@ -58,7 +58,7 @@ jobs:
           - os: ubuntu-latest
             arch: linux-x86_64
             python_arch: x64
-          - os: ubuntu-22.04-arm64
+          - os: ubuntu-22.04-arm
             arch: linux-aarch64
             python_arch: arm64
           - os: macos-13
