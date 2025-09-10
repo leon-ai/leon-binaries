@@ -1,0 +1,102 @@
+name: Build Binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      bin:
+        description: "Binary folder/name under bins/ (e.g., faster_whisper)"
+        required: true
+        default: "faster_whisper"
+      bins_dir:
+        description: "Root folder containing binaries"
+        required: true
+        default: "bins"
+      python_version:
+        description: "Python version to use"
+        required: true
+        default: "3.11.9"
+
+concurrency:
+  group: build-binaries-${{ github.ref }}-${{ inputs.bin }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  BIN: ${{ inputs.bin }}
+  BINS_DIR: ${{ inputs.bins_dir }}
+  PYTHON_VERSION: ${{ inputs.python_version }}
+
+jobs:
+  build:
+    name: Build ${{ env.BIN }} (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: linux-x86_64
+            python_arch: x64
+          - os: ubuntu-22.04-arm64
+            arch: linux-aarch64
+            python_arch: arm64
+          - os: macos-13
+            arch: macosx-x86_64
+            python_arch: x64
+          - os: macos-14
+            arch: macosx-arm64
+            python_arch: arm64
+          - os: windows-latest
+            arch: win-amd64
+            python_arch: x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Set up Python ${{ matrix.python_arch }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: ${{ matrix.python_arch }}
+
+      - name: Install pipenv
+        run: python -m pip install --upgrade pip pipenv
+
+      - name: Build with PyInstaller via Node script
+        run: npm run build ${{ env.BIN }}
+
+      - name: Read version
+        shell: bash
+        working-directory: ${{ env.BINS_DIR }}/${{ env.BIN }}
+        run: echo "VERSION=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_ENV"
+
+      - name: Collect binary (no archive)
+        shell: bash
+        working-directory: ${{ env.BINS_DIR }}/${{ env.BIN }}
+        env:
+          BIN: ${{ env.BIN }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          EXT=""
+          [ "${{ runner.os }}" = "Windows" ] && EXT=".exe" || true
+          SRC="dist/$BIN$EXT"; [ -f "$SRC" ] || SRC="dist/$BIN/$BIN$EXT"
+          [ -f "$SRC" ] || { echo "Binary not found in dist/"; ls -R dist || true; exit 1; }
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          cp -f "$SRC" "$GITHUB_WORKSPACE/out/${BIN}_${VERSION}-${ARCH}$EXT"
+          chmod +x "$GITHUB_WORKSPACE/out/${BIN}_${VERSION}-${ARCH}$EXT" || true
+          ls -la "$GITHUB_WORKSPACE/out"
+
+      - name: Upload artifact (raw binary)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BIN }}_${{ env.VERSION }}-${{ matrix.arch }}
+          path: out/*
