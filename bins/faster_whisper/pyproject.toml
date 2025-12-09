@@ -1,0 +1,17 @@
+[project]
+name = "faster-whisper-binary"
+version = "1.0.0"
+description = "Faster Whisper binary for audio transcription"
+requires-python = "==3.11.9"
+dependencies = [
+  "faster-whisper==1.2.0",
+  "requests==2.32.5",
+  "backports.tarfile>=1.0.0",
+  "setuptools>=75.6.0",
+  "wheel>=0.45.1",
+]
+
+[dependency-groups]
+dev = [
+  "pyinstaller==6.15.0",
+]

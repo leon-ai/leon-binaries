@@ -55,18 +55,19 @@ async function main() {
   console.log(`- Working directory: ${binDir}`)
   console.log(`- Spec file: ${specFile}`)
 
-  const lockPath = path.join(binDir, 'Pipfile.lock')
-  const hasLock = fs.existsSync(lockPath)
+  const pyprojectPath = path.join(binDir, 'pyproject.toml')
+  const hasPyproject = fs.existsSync(pyprojectPath)
 
-  // Install dependencies in the Pipenv environment
-  console.log(hasLock ? 'Installing with pipenv (locked)...' : 'Installing with pipenv...')
-  run(process.env.PYTHON || 'python', ['-m', 'pipenv', 'install', ...(hasLock ? ['--deploy'] : [])], {
+
+  // Install dependencies using uv
+  console.log('Installing dependencies with uv...')
+  run('uv', ['sync', '--frozen'], {
     cwd: binDir
   })
 
-  // Execute: pipenv run pyinstaller <bin>.spec (using cwd instead of `cd`)
+  // Execute: uv run pyinstaller <bin>.spec
   console.log('Running PyInstaller...')
-  run(process.env.PYTHON || 'python', ['-m', 'pipenv', 'run', 'pyinstaller', `${binName}.spec`], {
+  run('uv', ['run', 'pyinstaller', `${binName}.spec`], {
     cwd: binDir
   })
 

@@ -4,9 +4,9 @@ import sys
 import os
 from pathlib import Path
 
-VERSION = '1.0.1'
-PACKAGE_NAME = 'faster_whisper'
-RUN_MAIN_SCRIPT = 'run_faster_whisper.py'
+VERSION = '1.0.0'
+PACKAGE_NAME = 'ecapa-voice-gender-classifier'
+RUN_MAIN_SCRIPT = 'run_ecapa_voice_gender_classifier.py'
 
 # Get the directory where this spec file is located
 spec_root = os.getcwd()
@@ -20,49 +20,37 @@ a = Analysis(
     pathex=[str(spec_root)],
     binaries=[],
     datas=[
-        # Add any data files needed by faster-whisper here
-        # Example: ('path/to/data', 'destination/in/bundle')
+        # Add model.py to the bundle
+        (os.path.join(spec_root, 'model.py'), '.'),
     ],
     hiddenimports=[
-        # Core faster-whisper dependencies
-        PACKAGE_NAME,
-        f"{PACKAGE_NAME}.transcribe",
-        f"{PACKAGE_NAME}.audio",
-        f"{PACKAGE_NAME}.utils",
-        f"{PACKAGE_NAME}.vad",
+        # Core torch dependencies
+        'torch',
+        'torch.nn',
+        'torch.nn.functional',
+        'torch._C',
+        'torch._dynamo',
         
-        # CTranslate2 dependencies
-        'ctranslate2',
-        'ctranslate2._C',
+        # Torchaudio dependencies
+        'torchaudio',
+        'torchaudio.transforms',
+        'torchaudio.transforms.Resample',
         
-        # Audio processing dependencies
-        'av',
-        'av.audio',
-        'av.container',
-        'av.codec',
-        'av.stream',
+        # Soundfile dependencies
+        'soundfile',
+        '_soundfile',
+        '_soundfile_data',
         
-        # Tokenization and NLP
-        'tokenizers',
-        'tokenizers.implementations',
-        'tokenizers.models',
-        'tokenizers.normalizers',
-        'tokenizers.pre_tokenizers',
-        'tokenizers.processors',
-        'tokenizers.trainers',
-        'tokenizers.decoders',
-        
-        # Hugging Face hub
+        # Hugging Face dependencies
         'huggingface_hub',
         'huggingface_hub.constants',
         'huggingface_hub.file_download',
         'huggingface_hub.hf_api',
         'huggingface_hub.utils',
         
-        # Requests and HTTP
-        'requests',
-        'urllib3',
-        'charset_normalizer',
+        # Safetensors
+        'safetensors',
+        'safetensors.torch',
         
         # NumPy and scientific computing
         'numpy',
@@ -71,7 +59,7 @@ a = Analysis(
         'numpy.lib',
         'numpy.lib.format',
         
-        # Packaging and utilities
+        # Other common dependencies
         'pathlib',
         'typing',
         'typing_extensions',
@@ -79,19 +67,15 @@ a = Analysis(
         'packaging.version',
         'packaging.specifiers',
         'packaging.requirements',
+        'math',
         
-        # Backports and jaraco (fixes the missing backports error)
-        'backports',
-        'backports.tarfile',
-        'jaraco',
-        'jaraco.text',
-        'jaraco.context',
-        'jaraco.functools',
+        # Model module
+        'model',
         
-        # pkg_resources alternatives
-        'importlib.metadata',
-        'importlib.resources',
-        'importlib_metadata',
+        # Argparse and system modules
+        'argparse',
+        'sys',
+        'os',
     ],
     hookspath=[],
     hooksconfig={},
@@ -112,6 +96,7 @@ a = Analysis(
         'sklearn',
         'PIL',
         'cv2',
+        'transformers',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

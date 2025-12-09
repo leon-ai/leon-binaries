@@ -3,10 +3,6 @@
 Faster Whisper CLI Tool for audio transcription
 """
 
-# TODO: must load model from local
-# TODO: create GitHub action to distribute binaries
-# TODO: make use of version.py similar to main repo for binary naming
-
 import argparse
 import sys
 import os
@@ -16,8 +12,10 @@ from typing import Optional, Union
 try:
     from faster_whisper import WhisperModel
 except ImportError:
-    print("Error: faster-whisper package not found. Please install it with: pip install faster-whisper")
-    sys.exit(1)
+    # Only show error if we're the main process
+    if __name__ == "__main__":
+        print("Error: faster-whisper package not found. Please install it with: pip install faster-whisper")
+        sys.exit(1)
 
 
 class FasterWhisperCLI:
@@ -213,4 +211,9 @@ Examples:
 
 
 if __name__ == "__main__":
+    # Fix for PyInstaller multiprocessing issue
+    import multiprocessing
+
+    multiprocessing.freeze_support()
+
     main()
