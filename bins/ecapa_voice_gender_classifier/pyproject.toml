@@ -18,23 +18,32 @@ dependencies = [
 
 [tool.uv]
 # Use CPU-only PyTorch to reduce binary size (no CUDA dependencies)
-# We use 'extra' indexes to keep PyPI as primary (for non-PyTorch packages)
+# PyPI is primary for all packages except PyTorch on non-macOS-x86_64
+index-url = "https://pypi.org/simple"
+
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 constraint-dependencies = [
+  # macOS x86_64: Use 2.2.2 from PyPI (last version supporting Intel Macs)
   "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  # All other platforms: Use 2.5.1 CPU-only
   "torch==2.5.1; sys_platform != 'darwin' or platform_machine != 'x86_64'",
   "torchaudio==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
   "torchaudio==2.5.1; sys_platform != 'darwin' or platform_machine != 'x86_64'",
 ]
 
 [tool.uv.sources]
-# Tell UV to get torch and torchaudio from the pytorch-cpu index
-torch = { index = "pytorch-cpu" }
-torchaudio = { index = "pytorch-cpu" }
+# Get torch/torchaudio from CPU index on non-macOS-x86_64 platforms
+# For macOS x86_64, use PyPI (default) which has 2.2.2
+torch = [
+  { index = "pytorch-cpu", marker = "sys_platform != 'darwin' or platform_machine != 'x86_64'" },
+]
+torchaudio = [
+  { index = "pytorch-cpu", marker = "sys_platform != 'darwin' or platform_machine != 'x86_64'" },
+]
 
 [dependency-groups]
 dev = [
