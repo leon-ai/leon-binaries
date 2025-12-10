@@ -17,12 +17,24 @@ dependencies = [
 ]
 
 [tool.uv]
+# Use CPU-only PyTorch to reduce binary size (no CUDA dependencies)
+# We use 'extra' indexes to keep PyPI as primary (for non-PyTorch packages)
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 constraint-dependencies = [
   "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
   "torch==2.5.1; sys_platform != 'darwin' or platform_machine != 'x86_64'",
   "torchaudio==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
   "torchaudio==2.5.1; sys_platform != 'darwin' or platform_machine != 'x86_64'",
 ]
+
+[tool.uv.sources]
+# Tell UV to get torch and torchaudio from the pytorch-cpu index
+torch = { index = "pytorch-cpu" }
+torchaudio = { index = "pytorch-cpu" }
 
 [dependency-groups]
 dev = [
