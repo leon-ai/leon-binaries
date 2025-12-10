@@ -1,5 +1,5 @@
 [project]
-name = "ecapa-voice-gender-classifier"
+name = "ecapa_voice_gender_classifier"
 version = "1.0.0"
 description = "Gender detection from voice files using ECAPA-TDNN"
 requires-python = "==3.11.9"
