@@ -7,9 +7,11 @@ dependencies = [
   # PyTorch versions are platform-specific
   # macOS x86_64 uses 2.2.2 (last version supporting Intel Macs)
   # PyTorch 2.3.0+ dropped support for macOS x86_64
-  # All other platforms use 2.5.1
-  "torch>=2.2.2,<2.6",
-  "torchaudio>=2.2.2,<2.6",
+  # All other platforms use 2.5.1 CPU-only
+  "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "torch==2.5.1; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+  "torchaudio==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "torchaudio==2.5.1; sys_platform != 'darwin' or platform_machine != 'x86_64'",
   "soundfile==0.12.1",
   "huggingface-hub==0.26.5",
   "safetensors==0.4.5",
@@ -18,22 +20,9 @@ dependencies = [
 
 [tool.uv]
 # Use CPU-only PyTorch to reduce binary size (no CUDA dependencies)
-# PyPI is primary for all packages except PyTorch on non-macOS-x86_64
-index-url = "https://pypi.org/simple"
-
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
-explicit = true
-
-constraint-dependencies = [
-  # macOS x86_64: Use 2.2.2 from PyPI (last version supporting Intel Macs)
-  "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-  # All other platforms: Use 2.5.1 CPU-only
-  "torch==2.5.1; sys_platform != 'darwin' or platform_machine != 'x86_64'",
-  "torchaudio==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-  "torchaudio==2.5.1; sys_platform != 'darwin' or platform_machine != 'x86_64'",
-]
 
 [tool.uv.sources]
 # Get torch/torchaudio from CPU index on non-macOS-x86_64 platforms
