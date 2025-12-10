@@ -5,10 +5,11 @@ description = "Gender detection from voice files using ECAPA-TDNN"
 requires-python = "==3.11.9"
 dependencies = [
   # PyTorch versions are platform-specific
-  # macOS x86_64 uses 2.4.1 (2.5.x dropped support)
+  # macOS x86_64 uses 2.2.2 (last version supporting Intel Macs)
+  # PyTorch 2.3.0+ dropped support for macOS x86_64
   # All other platforms use 2.5.1
-  "torch>=2.4.1,<2.6",
-  "torchaudio>=2.4.1,<2.6",
+  "torch>=2.2.2,<2.6",
+  "torchaudio>=2.2.2,<2.6",
   "soundfile==0.12.1",
   "huggingface-hub==0.26.5",
   "safetensors==0.4.5",
@@ -17,9 +18,9 @@ dependencies = [
 
 [tool.uv]
 constraint-dependencies = [
-  "torch==2.4.1; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
   "torch==2.5.1; sys_platform != 'darwin' or platform_machine != 'x86_64'",
-  "torchaudio==2.4.1; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "torchaudio==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
   "torchaudio==2.5.1; sys_platform != 'darwin' or platform_machine != 'x86_64'",
 ]
 
