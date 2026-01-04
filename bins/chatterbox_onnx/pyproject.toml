@@ -6,7 +6,9 @@ requires-python = "==3.11.9"
 dependencies = [
     "librosa==0.11.0",
     "numpy==2.2.6",
-    "onnxruntime-gpu==1.23.2",
+    # onnxruntime-gpu only available for Linux x86_64, use CPU version for other platforms
+    "onnxruntime-gpu==1.23.2; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "onnxruntime==1.23.2; sys_platform != 'linux' or platform_machine != 'x86_64'",
     "pkuseg==0.0.25",     # Official Chinese segmenter
     "pykakasi==2.3.0",    # Official Japanese converter
     "soundfile==0.13.1",
