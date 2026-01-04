@@ -5,15 +5,30 @@ description = "Chatterbox binary for zero-shot text-to-speech"
 requires-python = "==3.11.9"
 dependencies = [
     "librosa==0.11.0",
-    "numpy==2.2.6",
-    # onnxruntime-gpu only available for Linux x86_64, use CPU version for other platforms
-    "onnxruntime-gpu==1.23.2; sys_platform == 'linux' and platform_machine == 'x86_64'",
-    "onnxruntime==1.23.2; sys_platform != 'linux' or platform_machine != 'x86_64'",
+    # numpy 2.2.6 on most platforms, but 2.0.2 on macOS Intel (for llvmlite/numba compatibility)
+    "numpy==2.2.6; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "numpy==2.0.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    # numba/llvmlite: constrain to 0.60.0/0.43.0 on macOS Intel (no wheels for newer versions)
+    "numba==0.60.0; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "llvmlite==0.43.0; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    # onnxruntime-gpu available for Linux x86_64 and Windows AMD64, use CPU version for other platforms
+    "onnxruntime-gpu==1.23.2; (sys_platform == 'linux' and platform_machine == 'x86_64') or (sys_platform == 'win32' and platform_machine == 'AMD64')",
+    "onnxruntime==1.23.2; (sys_platform != 'linux' and sys_platform != 'win32') or (sys_platform == 'linux' and platform_machine != 'x86_64') or (sys_platform == 'win32' and platform_machine != 'AMD64')",
     "pkuseg==0.0.25",     # Official Chinese segmenter
     "pykakasi==2.3.0",    # Official Japanese converter
     "soundfile==0.13.1",
     "tqdm==4.67.1",
     "transformers==4.57.3",
+]
+
+[tool.uv]
+# Tell uv to resolve for multiple platforms to ensure compatibility
+environments = [
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "sys_platform == 'linux' and platform_machine == 'aarch64'",
+  "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "sys_platform == 'win32' and platform_machine == 'AMD64'",
 ]
 
 [tool.uv.extra-build-dependencies]
