@@ -1,0 +1,23 @@
+[project]
+name = "chatterbox_onnx"
+version = "1.0.0"
+description = "Chatterbox binary for zero-shot text-to-speech"
+requires-python = "==3.11.9"
+dependencies = [
+    "librosa==0.11.0",
+    "numpy==2.2.6",
+    "onnxruntime-gpu==1.23.2",
+    "pkuseg==0.0.25",     # Official Chinese segmenter
+    "pykakasi==2.3.0",    # Official Japanese converter
+    "soundfile==0.13.1",
+    "tqdm==4.67.1",
+    "transformers==4.57.3",
+]
+
+[tool.uv.extra-build-dependencies]
+pkuseg = ["numpy<2", "setuptools", "cython"]
+
+[dependency-groups]
+dev = [
+  "pyinstaller==6.15.0",
+]

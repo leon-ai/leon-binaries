@@ -10,6 +10,8 @@ test/coverage/
 **/src/.venv/*
 logs/*
 
+bins/chatterbox_onnx/output
+
 package-lock.json
 *.pyc
 .DS_Store
