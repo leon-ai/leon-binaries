@@ -4,7 +4,6 @@ import sys
 import os
 from pathlib import Path
 
-VERSION = '1.0.0'
 PACKAGE_NAME = 'ecapa_voice_gender_classifier'
 RUN_MAIN_SCRIPT = 'run_ecapa_voice_gender_classifier.py'
 

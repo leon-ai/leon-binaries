@@ -4,7 +4,6 @@ import sys
 import os
 from pathlib import Path
 
-VERSION = '1.0.1'
 PACKAGE_NAME = 'faster_whisper'
 RUN_MAIN_SCRIPT = 'run_faster_whisper.py'
 

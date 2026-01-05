@@ -1,6 +1,6 @@
 [project]
 name = "chatterbox_onnx"
-version = "1.0.0"
+dynamic = ["version"]
 description = "Chatterbox binary for zero-shot text-to-speech"
 requires-python = "==3.11.9"
 dependencies = [
@@ -33,6 +33,9 @@ environments = [
 
 [tool.uv.extra-build-dependencies]
 pkuseg = ["numpy<2", "setuptools", "cython"]
+
+[tool.hatch.version]
+path = "version.py"
 
 [dependency-groups]
 dev = [

@@ -12,7 +12,6 @@ import os
 # CONFIGURATION
 # =============================================================================
 
-VERSION = '1.0.0'
 PACKAGE_NAME = 'chatterbox_onnx'
 RUN_MAIN_SCRIPT = 'run_chatterbox_onnx.py'
 

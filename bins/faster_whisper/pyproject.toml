@@ -1,6 +1,6 @@
 [project]
 name = "faster-whisper-binary"
-version = "1.0.0"
+dynamic = ["version"]
 description = "Faster Whisper binary for audio transcription"
 requires-python = "==3.11.9"
 dependencies = [
@@ -10,6 +10,9 @@ dependencies = [
   "setuptools>=75.6.0",
   "wheel>=0.45.1",
 ]
+
+[tool.hatch.version]
+path = "version.py"
 
 [dependency-groups]
 dev = [

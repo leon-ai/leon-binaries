@@ -576,6 +576,7 @@ def _generate_speech(task):
     output_path = task.get("audio_path")
     cfg_strength = task.get("cfg_strength", 0.5)
     exaggeration = task.get("exaggeration", 0.5)
+    temperature = task.get("temperature", 0.5)
 
     if not text or not output_path:
         return "❌ Skipped: Missing required fields"
@@ -629,7 +630,7 @@ def _generate_speech(task):
             # Sample next token
             gen_array = np.array([generated], dtype=np.int64)
             processed_logits = penalty_processor(gen_array, logits[:, -1, :])
-            next_token = _sample_token(processed_logits[0])
+            next_token = _sample_token(processed_logits[0], temperature=temperature)
             generated.append(next_token)
 
             if next_token == STOP_SPEECH_TOKEN:

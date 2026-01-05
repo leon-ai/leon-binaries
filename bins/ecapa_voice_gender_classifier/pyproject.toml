@@ -1,6 +1,6 @@
 [project]
 name = "ecapa_voice_gender_classifier"
-version = "1.0.0"
+dynamic = ["version"]
 description = "Gender detection from voice files using ECAPA-TDNN"
 requires-python = "==3.11.9"
 dependencies = [
@@ -33,6 +33,9 @@ torch = [
 torchaudio = [
   { index = "pytorch-cpu", marker = "sys_platform != 'darwin' or platform_machine != 'x86_64'" },
 ]
+
+[tool.hatch.version]
+path = "version.py"
 
 [dependency-groups]
 dev = [
