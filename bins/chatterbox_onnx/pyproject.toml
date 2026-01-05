@@ -14,11 +14,11 @@ dependencies = [
     # onnxruntime-gpu available for Linux x86_64 and Windows AMD64, use CPU version for other platforms
     "onnxruntime-gpu==1.23.2; (sys_platform == 'linux' and platform_machine == 'x86_64') or (sys_platform == 'win32' and platform_machine == 'AMD64')",
     "onnxruntime==1.23.2; (sys_platform != 'linux' and sys_platform != 'win32') or (sys_platform == 'linux' and platform_machine != 'x86_64') or (sys_platform == 'win32' and platform_machine != 'AMD64')",
-    "pkuseg==0.0.25",     # Official Chinese segmenter
-    "pykakasi==2.3.0",    # Official Japanese converter
+    "pkuseg==0.0.25", # Official Chinese segmenter
+    "pykakasi==2.3.0", # Official Japanese converter
     "soundfile==0.13.1",
     "tqdm==4.67.1",
-    "transformers==4.57.3",
+    "transformers==4.57.3"
 ]
 
 [tool.uv]
