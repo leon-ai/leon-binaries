@@ -8,8 +8,11 @@ dynamic = ["version"]
 description = "ONNX-based Vocal Remover Binary"
 requires-python = "==3.11.9"
 dependencies = [
+  "librosa==0.11.0",
   "numpy==1.26.4",
-  "librosa==0.10.2",
+  # numba/llvmlite: constrain to 0.60.0/0.43.0 on macOS Intel (no wheels for newer versions)
+  "numba==0.60.0; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "llvmlite==0.43.0; sys_platform == 'darwin' and platform_machine == 'x86_64'",
   "soundfile==0.12.1",
   # onnxruntime-gpu available for Linux x86_64 and Windows AMD64, use CPU version for other platforms
   "onnxruntime-gpu==1.23.2; (sys_platform == 'linux' and platform_machine == 'x86_64') or (sys_platform == 'win32' and platform_machine == 'AMD64')",
