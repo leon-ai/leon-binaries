@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ultimate_vocal_remover_onnx"
+dynamic = ["version"]
+description = "ONNX-based Vocal Remover Binary"
+requires-python = "==3.11.9"
+dependencies = [
+  "numpy==1.26.4",
+  "librosa==0.10.2",
+  "soundfile==0.12.1",
+  # onnxruntime-gpu available for Linux x86_64 and Windows AMD64, use CPU version for other platforms
+  "onnxruntime-gpu==1.23.2; (sys_platform == 'linux' and platform_machine == 'x86_64') or (sys_platform == 'win32' and platform_machine == 'AMD64')",
+  "onnxruntime==1.23.2; (sys_platform != 'linux' and sys_platform != 'win32') or (sys_platform == 'linux' and platform_machine != 'x86_64') or (sys_platform == 'win32' and platform_machine != 'AMD64')",
+  "backports-tarfile==1.2.0",
+]
+
+[tool.uv]
+# Optimization: This tells uv to not try to build a wheel for the project itself during sync
+# This is ideal for binaries/applications and completely bypasses layout errors.
+package = false
+# Tell uv to resolve for multiple platforms to ensure compatibility
+environments = [
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "sys_platform == 'linux' and platform_machine == 'aarch64'",
+  "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "sys_platform == 'win32' and platform_machine == 'AMD64'",
+]
+
+[tool.hatch.version]
+path = "version.py"
+
+[tool.hatch.build.targets.wheel]
+# This tells Hatchling to include the root files in the build
+packages = ["."]
+
+[dependency-groups]
+dev = [
+  "pyinstaller==6.15.0",
+]
