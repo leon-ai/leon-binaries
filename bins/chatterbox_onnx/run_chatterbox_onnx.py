@@ -10,6 +10,24 @@ import os
 import sys
 import argparse
 import multiprocessing
+import contextlib
+
+@contextlib.contextmanager
+def suppress_stderr():
+    """Redirects stderr to devnull at the C-level."""
+    try:
+        err_fd = sys.stderr.fileno()
+        save_err = os.dup(err_fd)
+        with open(os.devnull, 'w') as devnull:
+            os.dup2(devnull.fileno(), err_fd)
+            try:
+                yield
+            finally:
+                os.dup2(save_err, err_fd)
+                os.close(save_err)
+    except (AttributeError, ValueError, IOError):
+        # Fallback for environments where fileno() or dup() might fail
+        yield
 
 # =============================================================================
 # ENVIRONMENT CONFIGURATION
@@ -18,6 +36,7 @@ import multiprocessing
 # Disable tokenizer parallelism to avoid deadlocks and fork/spawn warnings,
 # especially when bundled with PyInstaller on macOS/Linux.
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ['ORT_LOGGING_LEVEL'] = '3'
 
 # =============================================================================
 # CUDA LIBRARY LOADING (Must happen before importing ONNX Runtime)
@@ -128,7 +147,9 @@ from unicodedata import category
 
 import concurrent.futures
 import numpy as np
-import onnxruntime as ort
+with suppress_stderr():
+    import onnxruntime as ort
+    ort.set_default_logger_severity(3)
 import soundfile as sf
 from tqdm import tqdm
 
@@ -190,8 +211,9 @@ def _detect_accelerator():
     if _cuda_path_failed:
         print("⚠️ CUDA path was provided but libraries failed to load. Using CPU mode.")
         return 'CPU'
-    
-    providers = ort.get_available_providers()
+
+    with suppress_stderr():
+        providers = ort.get_available_providers()
     if 'CUDAExecutionProvider' in providers:
         return 'CUDA'
     # CoreML is disabled by default on macOS due to compatibility issues with quantized models
@@ -233,6 +255,7 @@ def _calculate_optimal_settings(accelerator):
 def _create_session_options(accelerator, threads_per_job):
     """Create optimized ONNX Runtime session options."""
     opts = ort.SessionOptions()
+    opts.log_severity_level = 3
     opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
     if accelerator == 'CUDA':
@@ -435,7 +458,7 @@ def _sample_token(logits, temperature=0.5, top_k=50):
 def _load_models(resource_path):
     """Load all ONNX models and tokenizer."""
     global _state
-    
+
     # Convert to absolute path
     resource_path = os.path.abspath(os.path.expanduser(resource_path))
     _state.models_dir = resource_path
@@ -479,7 +502,8 @@ def _load_models(resource_path):
     cuda_failed = False
     for name, path in model_paths.items():
         try:
-            _state.models[name] = ort.InferenceSession(path, sess_opts, providers=providers)
+            with suppress_stderr():
+                _state.models[name] = ort.InferenceSession(path, sess_opts, providers=providers)
         except Exception as e:
             if _state.accelerator == 'CUDA' and not cuda_failed:
                 print(f"❌ CUDA initialization failed: {e}")
@@ -498,10 +522,12 @@ def _load_models(resource_path):
                     if prev_name == name:
                         break
                     if prev_name in _state.models:
-                        _state.models[prev_name] = ort.InferenceSession(prev_path, sess_opts, providers=providers)
+                        with suppress_stderr():
+                            _state.models[prev_name] = ort.InferenceSession(prev_path, sess_opts, providers=providers)
                         print(f"   ✅ Reloaded {prev_name}")
 
-                _state.models[name] = ort.InferenceSession(path, sess_opts, providers=providers)
+                with suppress_stderr():
+                    _state.models[name] = ort.InferenceSession(path, sess_opts, providers=providers)
             else:
                 raise
 
