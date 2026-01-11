@@ -9,6 +9,15 @@ automatic CUDA/CPU fallback and multi-core optimization.
 import os
 import sys
 import argparse
+import multiprocessing
+
+# =============================================================================
+# ENVIRONMENT CONFIGURATION
+# =============================================================================
+
+# Disable tokenizer parallelism to avoid deadlocks and fork/spawn warnings,
+# especially when bundled with PyInstaller on macOS/Linux.
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # =============================================================================
 # CUDA LIBRARY LOADING (Must happen before importing ONNX Runtime)
@@ -118,12 +127,10 @@ import unicodedata
 from unicodedata import category
 
 import concurrent.futures
-import librosa
 import numpy as np
 import onnxruntime as ort
 import soundfile as sf
 from tqdm import tqdm
-from transformers import PreTrainedTokenizerFast
 
 # =============================================================================
 # CONSTANTS
@@ -505,6 +512,7 @@ def _load_models(resource_path):
         raise FileNotFoundError(f"Tokenizer file not found: {tokenizer_path}")
 
     print(f"📖 Loading tokenizer from: {tokenizer_path}")
+    from transformers import PreTrainedTokenizerFast
     _state.tokenizer = PreTrainedTokenizerFast(tokenizer_file=tokenizer_path)
     _state.cangjie_converter = ChineseCangjieConverter(resource_path)
 
@@ -543,6 +551,7 @@ def _resolve_voice_path(task):
 
 def _get_voice_embedding(voice_path, cfg_strength):
     """Get or compute voice embedding with caching."""
+    import librosa
     cache_key = (voice_path, cfg_strength)
 
     with _state.cache_lock:
@@ -700,17 +709,30 @@ def synthesize_speech(json_file, resource_path):
 
     start_time = time.time()
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=_state.max_concurrent_jobs) as executor:
-        futures = {executor.submit(_generate_speech, task): task for task in tasks}
-        for future in tqdm(concurrent.futures.as_completed(futures), total=len(tasks)):
-            msg = future.result()
-            if "❌" in msg:
-                tqdm.write(msg)
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=_state.max_concurrent_jobs) as executor:
+            futures = {executor.submit(_generate_speech, task): task for task in tasks}
+            for future in tqdm(concurrent.futures.as_completed(futures), total=len(tasks), desc="Synthesizing"):
+                try:
+                    msg = future.result()
+                    if "❌" in msg:
+                        tqdm.write(msg)
+                except Exception as e:
+                    tqdm.write(f"❌ Thread Exception: {e}")
+    except KeyboardInterrupt:
+        print("\n🛑 Synthesis interrupted by user. Shutting down...")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ Execution Error: {e}")
+        sys.exit(1)
 
     print(f"\n✨ Done in {time.time() - start_time:.2f}s")
 
 def main():
     """CLI entry point."""
+    # Required for PyInstaller onefile builds when using multiprocessing/spawn
+    multiprocessing.freeze_support()
+
     parser = argparse.ArgumentParser(
         description="Chatterbox ONNX - Text-to-Speech Synthesis CLI Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
