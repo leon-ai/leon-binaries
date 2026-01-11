@@ -1,15 +1,38 @@
 import os
+os.environ['ORT_LOGGING_LEVEL'] = '3'
+
 import sys
 import json
 import argparse
 import warnings
+import contextlib
 import numpy as np
 import soundfile as sf
 import librosa
-import onnxruntime as ort
+
+@contextlib.contextmanager
+def suppress_stderr():
+    """Redirects stderr to devnull at the C-level."""
+    try:
+        err_fd = sys.stderr.fileno()
+        save_err = os.dup(err_fd)
+        with open(os.devnull, 'w') as devnull:
+            os.dup2(devnull.fileno(), err_fd)
+            try:
+                yield
+            finally:
+                os.dup2(save_err, err_fd)
+                os.close(save_err)
+    except (AttributeError, ValueError, IOError):
+        # Fallback for environments where fileno() or dup() might fail
+        yield
+
+with suppress_stderr():
+    import onnxruntime as ort
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
+ort.set_default_logger_severity(3)
 
 def find_cuda_lib_paths(root_path):
     found_paths = set()
@@ -65,6 +88,7 @@ class MDXNetSeparator:
             num_threads = 1
 
         sess_options = ort.SessionOptions()
+        sess_options.log_severity_level = 3
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
         # 'intra_op': Parallelize the heavy math inside the model
@@ -78,10 +102,12 @@ class MDXNetSeparator:
             providers.insert(0, 'CUDAExecutionProvider')
 
         try:
-            self.session = ort.InferenceSession(model_path, sess_options, providers=providers)
+            with suppress_stderr():
+                self.session = ort.InferenceSession(model_path, sess_options, providers=providers)
         except Exception as e:
             print(f"[Warning] Loading model failed ({e}), falling back to CPU.")
-            self.session = ort.InferenceSession(model_path, sess_options, providers=['CPUExecutionProvider'])
+            with suppress_stderr():
+                self.session = ort.InferenceSession(model_path, sess_options, providers=['CPUExecutionProvider'])
 
         # Configure Batching
         active_provider = self.session.get_providers()[0]
