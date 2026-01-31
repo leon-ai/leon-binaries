@@ -21,7 +21,8 @@ def load_config() -> Dict:
 
 
 # Hardcoded URL template for leon-binaries releases
-BINARIES_URL_TEMPLATE = "https://github.com/leon-ai/leon-binaries/releases/download/{binary_name}_{version}/{binary_name}_{version}-{os}-{arch}{ext}"
+# Format: https://github.com/leon-ai/leon-binaries/releases/download/{binary_name}-v{version}/{binary_name}_{version}-{os}-{arch}{ext}
+BINARIES_URL_TEMPLATE = "https://github.com/leon-ai/leon-binaries/releases/download/{binary_name}-v{version}/{binary_name}_{version}-{os}-{arch}{ext}"
 
 
 def clone_leon_repo(leon_repo_config: Dict, token: str, clone_dir: Path) -> Path:
