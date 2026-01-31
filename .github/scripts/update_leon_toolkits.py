@@ -182,12 +182,14 @@ def commit_and_push_changes(repo_path: Path, updates: List[str]) -> bool:
         True if commit was successful, False otherwise
     """
     try:
-        # Configure git
+        # Configure git with custom name/email or default to github-actions[bot]
+        git_name = os.environ.get('GIT_USER_NAME', 'github-actions[bot]')
+        git_email = os.environ.get('GIT_USER_EMAIL', 'github-actions[bot]@users.noreply.github.com')
+
         subprocess.run(['git', '-C', str(repo_path), 'config',
-                       'user.name', 'github-actions[bot]'], check=True)
+                       'user.name', git_name], check=True)
         subprocess.run(['git', '-C', str(repo_path), 'config',
-                       'user.email', 'github-actions[bot]@users.noreply.github.com'],
-                      check=True)
+                       'user.email', git_email], check=True)
 
         # Check for changes
         result = subprocess.run(['git', '-C', str(repo_path), 'status',
