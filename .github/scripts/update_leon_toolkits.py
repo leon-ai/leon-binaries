@@ -115,11 +115,15 @@ def update_toolkit_json(toolkit_path: Path, tool_name: str, binary_name: str,
         version_pattern = r'^\d+(\.\d+)+$'
         version_index = -1
 
+        print(f"       Filename parts: {underscore_parts}")
+
         for i, part in enumerate(underscore_parts[1:], start=1):  # Skip first part (binary name)
             # Look for version-like patterns (numbers with dots)
             # Common version formats: 1.1.34, 2025.12.08, 7.0.2
+            print(f"       Checking part {i}: '{part}'")
             if re.match(version_pattern, part):
                 version_index = i
+                print(f"       ✓ Found version at index {i}: '{part}'")
                 break
 
         if version_index == -1:
