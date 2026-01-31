@@ -24,31 +24,31 @@
           "source_pattern": "opencode-linux-x64.tar.gz",
           "target_os": "linux",
           "target_arch": "x86_64",
-          "target_ext": "tar.gz"
+          "target_ext": ".tar.gz"
         },
         {
           "source_pattern": "opencode-linux-arm64.tar.gz",
           "target_os": "linux",
           "target_arch": "aarch64",
-          "target_ext": "tar.gz"
+          "target_ext": ".tar.gz"
         },
         {
           "source_pattern": "opencode-darwin-x64.zip",
           "target_os": "macosx",
           "target_arch": "x86_64",
-          "target_ext": "tar.gz"
+          "target_ext": ".zip"
         },
         {
           "source_pattern": "opencode-darwin-arm64.zip",
           "target_os": "macosx",
           "target_arch": "arm64",
-          "target_ext": "tar.gz"
+          "target_ext": ".zip"
         },
         {
           "source_pattern": "opencode-windows-x64.zip",
           "target_os": "win",
           "target_arch": "amd64",
-          "target_ext": "zip"
+          "target_ext": ".zip"
         }
       ]
     },
@@ -84,7 +84,7 @@
           "source_pattern": "yt-dlp.exe",
           "target_os": "win",
           "target_arch": "amd64",
-          "target_ext": "exe"
+          "target_ext": ".exe"
         }
       ]
     }
