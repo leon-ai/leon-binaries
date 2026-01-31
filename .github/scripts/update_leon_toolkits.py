@@ -87,31 +87,66 @@ def update_toolkit_json(toolkit_path: Path, tool_name: str, binary_name: str,
     for platform, old_url in binaries.items():
         # Parse the old URL to extract OS, arch, and extension
         # URL format: https://github.com/leon-ai/leon-binaries/releases/download/{binary_name}_{version}/{binary_name}_{version}-{os}-{arch}{ext}
-        match = re.search(
-            rf'{re.escape(binary_name)}_[^/]+-{binary_name}_[^/]+-([^-]+)-([^-\.]+)(\.[^\.]+)',
-            old_url
+        #
+        # Examples:
+        # - opencode: opencode_1.1.34/opencode_1.1.34-linux-x86_64.tar.gz
+        # - yt-dlp: yt-dlp_2025.12.08/yt-dlp_2025.12.08-linux-x86_64
+
+        # Get just the filename part (after the last '/')
+        filename = old_url.split('/')[-1]
+
+        # Pattern: {binary_name}_{version}-{os}-{arch}{ext}
+        # Since the filename always ends with "{os}-{arch}{ext}", we can:
+        # 1. Split the filename by hyphens
+        # 2. Take the last 2-3 parts (OS, ARCH, optional EXT)
+        # This is more reliable than complex regex
+
+        parts = filename.split('-')
+
+        # The format is: binary_name_version-OS-ARCH[.EXT]
+        # We need at least binary_name, version, OS, ARCH
+        if len(parts) < 4:
+            print(f"  ⚠️  Could not parse URL for {platform}: {old_url}")
+            print(f"       Not enough parts after splitting by '-'")
+            continue
+
+        # Get OS and ARCH from the end
+        # The last part might be ARCH or ARCH.EXT
+        last_part = parts[-1]
+
+        # Check if last_part has an extension (contains a dot before the actual name)
+        if '.' in last_part and len(last_part.split('.')[0]) > 0:
+            # Has extension: split to get ARCH and EXT
+            dot_pos = last_part.find('.')
+            arch = last_part[:dot_pos]
+            ext = last_part[dot_pos:]
+        else:
+            # No extension
+            arch = last_part
+            ext = ''
+
+        # OS is the second-to-last part
+        os_name = parts[-2]
+
+        # Verify we found OS and ARCH
+        if not os_name or not arch:
+            print(f"  ⚠️  Could not parse URL for {platform}: {old_url}")
+            print(f"       Could not extract OS or ARCH")
+            continue
+
+        # Build new URL
+        new_url = BINARIES_URL_TEMPLATE.format(
+            binary_name=binary_name,
+            version=version,
+            os=os_name,
+            arch=arch,
+            ext=ext
         )
 
-        if match:
-            os_name = match.group(1)
-            arch = match.group(2)
-            ext = match.group(3)
-
-            # Build new URL
-            new_url = BINARIES_URL_TEMPLATE.format(
-                binary_name=binary_name,
-                version=version,
-                os=os_name,
-                arch=arch,
-                ext=ext
-            )
-
-            if old_url != new_url:
-                binaries[platform] = new_url
-                modified = True
-                print(f"    ✏️  Updated {platform}: {old_url.split('/')[-1][:40]}...")
-        else:
-            print(f"  ⚠️  Could not parse URL for {platform}: {old_url[:50]}...")
+        if old_url != new_url:
+            binaries[platform] = new_url
+            modified = True
+            print(f"    ✏️  Updated {platform}: {old_url}")
 
     if modified:
         # Write updated JSON back
