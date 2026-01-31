@@ -101,67 +101,70 @@ def update_toolkit_json(toolkit_path: Path, tool_name: str, binary_name: str,
         # - yt-dlp_2025.12.08-linux-x86_64
         # - ffmpeg_7.0.2-win-amd64.exe
 
-        # Strategy: Find the version segment and split after that
-        # Split by underscore first to find the version pattern
-        underscore_parts = filename.split('_')
+        # Strategy: Parse using known patterns
+        # Format is: {binary_name}_{version}-{os}-{arch}{ext}
+        # Find the version first (it separates the binary name from OS-ARCH-EXT)
 
-        if len(underscore_parts) < 3:
+        # Version pattern: numbers.dots (e.g., 1.1.34, 2025.12.08, 7.0.2)
+        version_pattern = r'(?P<version>\d+(\.\d+)+)'
+
+        # Match the pattern to extract version
+        match = re.search(r'_(?P<version>\d+(\.\d+)+)_', filename)
+
+        if not match:
+            # Alternative: version might be at the end of the first segment
+            match = re.search(r'_(?P<version>\d+(\.\d+)+)-', filename)
+
+        if not match:
             print(f"  ⚠️  Could not parse URL for {platform}: {old_url}")
-            print(f"       Not enough underscore-separated parts")
+            print(f"       Version pattern not found")
             continue
 
-        # Find which part is the version (matches version pattern)
-        # Pattern: numbers with dots (e.g., 1.1.34, 2025.12.08, 7.0.2)
-        version_pattern = r'^\d+(\.\d+)+$'
-        version_index = -1
+        version_str = match.group('version')
+        print(f"       Found version: {version_str}")
 
-        print(f"       Filename parts: {underscore_parts}")
+        # Get everything after the version
+        after_version_start = match.end()
 
-        for i, part in enumerate(underscore_parts[1:], start=1):  # Skip first part (binary name)
-            # Look for version-like patterns (numbers with dots)
-            # Common version formats: 1.1.34, 2025.12.08, 7.0.2
-            print(f"       Checking part {i}: '{part}'")
-            if re.match(version_pattern, part):
-                version_index = i
-                print(f"       ✓ Found version at index {i}: '{part}'")
-                break
+        # Extract the OS-ARCH-EXT part (everything after version)
+        # First remove the version from the filename to isolate OS-ARCH-EXT
+        filename_after_version = filename[after_version_start:]
 
-        if version_index == -1:
+        # Remove leading underscores or hyphens
+        filename_after_version = filename_after_version.lstrip('_-')
+
+        if not filename_after_version:
             print(f"  ⚠️  Could not parse URL for {platform}: {old_url}")
-            print(f"       Version not found")
+            print(f"       Nothing after version")
             continue
 
-        # Join everything after version and split by hyphen
-        after_version = '_'.join(underscore_parts[version_index + 1:])
+        print(f"       After version: '{filename_after_version}'")
 
-        if not after_version:
+        # Now extract OS, ARCH, EXT using pattern matching
+        # OS names are: linux, macosx, win (case insensitive)
+        os_pattern = r'(linux|macosx|win)'
+        os_match = re.search(os_pattern, filename_after_version, re.IGNORECASE)
+
+        if not os_match:
             print(f"  ⚠️  Could not parse URL for {platform}: {old_url}")
-            print(f"       Nothing after version segment")
+            print(f"       OS not found in: {filename_after_version}")
             continue
 
-        # Now we have something like "linux-x86_64.tar.gz" or "linux-x86_64"
-        hyphen_parts = after_version.split('-')
+        os_name = os_match.group(1).lower()
+        print(f"       Found OS: {os_name}")
 
-        if len(hyphen_parts) < 2:
-            print(f"  ⚠️  Could not parse URL for {platform}: {old_url}")
-            print(f"       Not enough parts after version")
-            continue
+        # Everything after OS is ARCH.EXT
+        after_os_start = os_match.end()
+        after_os = filename_after_version[after_os_start:].lstrip('-')
 
-        # OS is the first part after version
-        os_name = hyphen_parts[0]
-
-        # ARCH and EXT are in the last part
-        last_part = hyphen_parts[-1]
-
-        # Check if last_part has an extension
-        if '.' in last_part and len(last_part.split('.')[0]) > 0:
-            # Has extension
-            dot_pos = last_part.find('.')
-            arch = last_part[:dot_pos]
-            ext = last_part[dot_pos:]
+        # ARCH and EXT
+        # Check if there's an extension
+        if '.' in after_os:
+            dot_pos = after_os.find('.')
+            arch = after_os[:dot_pos]
+            ext = after_os[dot_pos:]
         else:
-            # No extension
-            arch = last_part
+            arch = after_os
             ext = ''
 
         # Verify we found OS and ARCH
@@ -169,6 +172,8 @@ def update_toolkit_json(toolkit_path: Path, tool_name: str, binary_name: str,
             print(f"  ⚠️  Could not parse URL for {platform}: {old_url}")
             print(f"       Could not extract OS or ARCH")
             continue
+
+        print(f"       Extracted: OS={os_name}, ARCH={arch}, EXT={ext}")
 
         # Build new URL
         new_url = BINARIES_URL_TEMPLATE.format(
