@@ -7,10 +7,10 @@ Updates toolkit.json files in the leon-ai/leon repository when binaries are upda
 import datetime
 import json
 import os
-import re
 import subprocess
 from pathlib import Path
 from typing import Dict, List
+import requests
 
 
 def load_config() -> Dict:
@@ -20,9 +20,127 @@ def load_config() -> Dict:
         return json.load(f)
 
 
-# Hardcoded URL template for leon-binaries releases
-# Format: https://github.com/leon-ai/leon-binaries/releases/download/{binary_name}-v{version}/{binary_name}_{version}-{os}-{arch}{ext}
-BINARIES_URL_TEMPLATE = "https://github.com/leon-ai/leon-binaries/releases/download/{binary_name}-v{version}/{binary_name}_{version}-{os}-{arch}{ext}"
+def update_toolkit_json(toolkit_path: Path, tool_name: str, binary_name: str,
+                       version: str, github_token: str) -> bool:
+    """
+    Update a toolkit.json file with new binary URLs from a GitHub release.
+
+    Args:
+        toolkit_path: Path to the toolkit.json file
+        tool_name: Name of the tool within the toolkit (e.g., "ytdlp")
+        binary_name: Name of the binary (e.g., "yt-dlp")
+        version: New binary version
+        github_token: GitHub token for API access
+
+    Returns:
+        True if file was modified, False otherwise
+    """
+    with open(toolkit_path, 'r') as f:
+        toolkit_data = json.load(f)
+
+    # Check if tool exists
+    if tool_name not in toolkit_data.get('tools', {}):
+        print(f"  ⚠️  Tool '{tool_name}' not found in toolkit")
+        return False
+
+    tool_config = toolkit_data['tools'][tool_name]
+    binaries = tool_config.get('binaries', {})
+
+    if not binaries:
+        print(f"  ⚠️  No binaries found for tool '{tool_name}'")
+        return False
+
+    # Fetch release assets from GitHub API
+    release_url = f"https://api.github.com/repos/leon-ai/leon-binaries/releases/tags/{binary_name}-v{version}"
+    headers = {'Authorization': f'token {github_token}'} if github_token else {}
+
+    try:
+        response = requests.get(release_url, headers=headers, timeout=10)
+        response.raise_for_status()
+    except Exception as e:
+        print(f"  ❌ Error fetching release: {e}")
+        return False
+
+    release_data = response.json()
+    assets = release_data.get('assets', [])
+
+    if not assets:
+        print(f"  ⚠️  No assets found in release {binary_name}-v{version}")
+        return False
+
+    # Build mapping of platform keys to new URLs
+    # Parse each asset to determine what platform it's for
+    new_urls = {}
+
+    for asset in assets:
+        asset_name = asset['name']
+        asset_url = asset['browser_download_url']
+
+        # Parse asset name to extract OS and ARCH
+        # Format: {binary_name}_{version}-{os}-{arch}{ext}
+        # After removing binary name and version: {os}-{arch}{ext}
+
+        # Remove binary name and version prefix
+        name_clean = asset_name.replace(f"{binary_name}_{version}-", "", 1)
+
+        # Extract OS (first part) and ARCH (second part, before extension)
+        parts = name_clean.split('-')
+
+        if len(parts) < 2:
+            continue
+
+        os_name = parts[0].lower()  # linux, macosx, win
+        arch = parts[1].split('.')[0]  # x86_64, aarch64, amd64, arm64
+
+        # Try to match platform keys in the toolkit
+        # Toolkit keys like: linux-x86_64, macosx-arm64, win-amd64, etc.
+        for platform_key in binaries.keys():
+            if os_name in platform_key and arch in platform_key:
+                new_urls[platform_key] = asset_url
+                break
+        else:
+            # Fuzzy matching for platform keys that might have different naming
+            for platform_key in binaries.keys():
+                # Check for OS match
+                if (os_name.startswith(platform_key.lower()) or
+                    platform_key.lower().startswith(os_name)):
+                    # Check for arch match
+                    if arch in platform_key or platform_key.lower().endswith(arch):
+                        new_urls[platform_key] = asset_url
+                        print(f"       Fuzzy matched {asset_name} → {platform_key}")
+                        break
+
+    # Update toolkit URLs
+    if not new_urls:
+        print(f"  ⚠️  No matching platform keys found for {len(assets)} assets")
+        return False
+
+    modified = False
+
+    for platform, old_url in binaries.items():
+        new_url = new_urls.get(platform)
+
+        if new_url:
+            if new_url != old_url:
+                binaries[platform] = new_url
+                modified = True
+                print(f"    ✏️  Updated {platform}")
+                print(f"       Old: {old_url[60:]}...")
+                print(f"       New: {new_url[60:]}...")
+            else:
+                print(f"    ✓ {platform} already up to date")
+        else:
+            print(f"    ⚠️  No matching asset for {platform}")
+
+    if modified:
+        # Write updated JSON back
+        with open(toolkit_path, 'w') as f:
+            json.dump(toolkit_data, f, indent=2)
+        print(f"  ✅ Updated toolkit: {toolkit_path}")
+        return True
+    else:
+        print(f"  ℹ️  No changes needed for {tool_name}")
+        return False
 
 
 def clone_leon_repo(leon_repo_config: Dict, token: str, clone_dir: Path) -> Path:
@@ -50,155 +168,6 @@ def clone_leon_repo(leon_repo_config: Dict, token: str, clone_dir: Path) -> Path
                         repo_url, str(clone_path)], check=True)
 
     return clone_path
-
-
-def update_toolkit_json(toolkit_path: Path, tool_name: str, binary_name: str,
-                       version: str) -> bool:
-    """
-    Update a toolkit.json file with new binary URLs.
-
-    Args:
-        toolkit_path: Path to the toolkit.json file
-        tool_name: Name of the tool within the toolkit (e.g., "ytdlp")
-        binary_name: Name of the binary (e.g., "yt-dlp")
-        version: New binary version
-
-    Returns:
-        True if file was modified, False otherwise
-    """
-    with open(toolkit_path, 'r') as f:
-        toolkit_data = json.load(f)
-
-    # Check if tool exists
-    if tool_name not in toolkit_data.get('tools', {}):
-        print(f"  ⚠️  Tool '{tool_name}' not found in toolkit")
-        return False
-
-    tool_config = toolkit_data['tools'][tool_name]
-    binaries = tool_config.get('binaries', {})
-
-    if not binaries:
-        print(f"  ⚠️  No binaries found for tool '{tool_name}'")
-        return False
-
-    # Track if we made any changes
-    modified = False
-
-    # Update each binary URL
-    for platform, old_url in binaries.items():
-        # Parse the old URL to extract OS, arch, and extension
-        # URL format: https://github.com/leon-ai/leon-binaries/releases/download/{binary_name}_{version}/{binary_name}_{version}-{os}-{arch}{ext}
-        #
-        # Examples:
-        # - opencode: opencode_1.1.34/opencode_1.1.34-linux-x86_64.tar.gz
-        # - yt-dlp: yt-dlp_2025.12.08/yt-dlp_2025.12.08-linux-x86_64
-
-        # Get just the filename part (after the last '/')
-        filename = old_url.split('/')[-1]
-
-        # Pattern: {binary_name}_{version}-{os}-{arch}{ext}
-        # Examples:
-        # - opencode_1.1.34-linux-x86_64.tar.gz
-        # - yt-dlp_2025.12.08-linux-x86_64
-        # - ffmpeg_7.0.2-win-amd64.exe
-
-        # Strategy: Parse using known patterns
-        # Format is: {binary_name}_{version}-{os}-{arch}{ext}
-        # Find the version first (it separates the binary name from OS-ARCH-EXT)
-
-        # Version pattern: numbers.dots (e.g., 1.1.34, 2025.12.08, 7.0.2)
-        version_pattern = r'(?P<version>\d+(\.\d+)+)'
-
-        # Match the pattern to extract version
-        match = re.search(r'_(?P<version>\d+(\.\d+)+)_', filename)
-
-        if not match:
-            # Alternative: version might be at the end of the first segment
-            match = re.search(r'_(?P<version>\d+(\.\d+)+)-', filename)
-
-        if not match:
-            print(f"  ⚠️  Could not parse URL for {platform}: {old_url}")
-            print(f"       Version pattern not found")
-            continue
-
-        version_str = match.group('version')
-        print(f"       Found version: {version_str}")
-
-        # Get everything after the version
-        after_version_start = match.end()
-
-        # Extract the OS-ARCH-EXT part (everything after version)
-        # First remove the version from the filename to isolate OS-ARCH-EXT
-        filename_after_version = filename[after_version_start:]
-
-        # Remove leading underscores or hyphens
-        filename_after_version = filename_after_version.lstrip('_-')
-
-        if not filename_after_version:
-            print(f"  ⚠️  Could not parse URL for {platform}: {old_url}")
-            print(f"       Nothing after version")
-            continue
-
-        print(f"       After version: '{filename_after_version}'")
-
-        # Now extract OS, ARCH, EXT using pattern matching
-        # OS names are: linux, macosx, win (case insensitive)
-        os_pattern = r'(linux|macosx|win)'
-        os_match = re.search(os_pattern, filename_after_version, re.IGNORECASE)
-
-        if not os_match:
-            print(f"  ⚠️  Could not parse URL for {platform}: {old_url}")
-            print(f"       OS not found in: {filename_after_version}")
-            continue
-
-        os_name = os_match.group(1).lower()
-        print(f"       Found OS: {os_name}")
-
-        # Everything after OS is ARCH.EXT
-        after_os_start = os_match.end()
-        after_os = filename_after_version[after_os_start:].lstrip('-')
-
-        # ARCH and EXT
-        # Check if there's an extension
-        if '.' in after_os:
-            dot_pos = after_os.find('.')
-            arch = after_os[:dot_pos]
-            ext = after_os[dot_pos:]
-        else:
-            arch = after_os
-            ext = ''
-
-        # Verify we found OS and ARCH
-        if not os_name or not arch:
-            print(f"  ⚠️  Could not parse URL for {platform}: {old_url}")
-            print(f"       Could not extract OS or ARCH")
-            continue
-
-        print(f"       Extracted: OS={os_name}, ARCH={arch}, EXT={ext}")
-
-        # Build new URL
-        new_url = BINARIES_URL_TEMPLATE.format(
-            binary_name=binary_name,
-            version=version,
-            os=os_name,
-            arch=arch,
-            ext=ext
-        )
-
-        if old_url != new_url:
-            binaries[platform] = new_url
-            modified = True
-            print(f"    ✏️  Updated {platform}: {old_url}")
-
-    if modified:
-        # Write updated JSON back
-        with open(toolkit_path, 'w') as f:
-            json.dump(toolkit_data, f, indent=2)
-        print(f"  ✅ Updated toolkit: {toolkit_path}")
-        return True
-    else:
-        print(f"  ℹ️  No changes needed for {tool_name}")
-        return False
 
 
 def commit_and_push_changes(repo_path: Path, updates: List[str]) -> bool:
@@ -336,7 +305,7 @@ def main():
         print(f"     Toolkit: {toolkit_rel_path}")
         print(f"     Tool: {tool_name}")
 
-        if update_toolkit_json(toolkit_path, tool_name, binary_name, version):
+        if update_toolkit_json(toolkit_path, tool_name, binary_name, version, leon_token):
             updates_made.append(f"{binary_name} → v{version}")
 
     # Commit and push if there were changes
@@ -346,8 +315,10 @@ def main():
         print(f"{'='*60}\n")
 
         commit_and_push_changes(leon_repo_path, updates_made)
-    else:
-        print("\n✅ No toolkit updates needed")
+
+    print("\n" + "="*60)
+    print(f"✅ Updated: {len(updates_made)} | ❌ Errors: 0")
+    print("="*60 + "\n")
 
 
 if __name__ == "__main__":
