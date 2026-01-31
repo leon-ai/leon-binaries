@@ -1,4 +1,4 @@
-name: Update Leon Binaries
+name: Update Third-Party Binaries
 
 on:
   schedule:
