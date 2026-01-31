@@ -1,0 +1,46 @@
+name: Update Leon Binaries
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  update-binaries:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install requests PyGithub
+      
+      - name: Update binaries
+        env:
+          GITHUB_TOKEN: ${{ secrets.BINARIES_UPLOAD_TOKEN }}
+        run: python .github/scripts/update_binaries.py
+
+      - name: Update Leon repository toolkits
+        if: success()
+        env:
+          LEON_REPO_TOKEN: ${{ secrets.LEON_REPO_TOKEN }}
+        run: python .github/scripts/update_leon_toolkits.py
+
+      - name: Create summary
+        if: always()
+        run: |
+          if [ -f /tmp/binary_update_summary.md ]; then
+            cat /tmp/binary_update_summary.md >> $GITHUB_STEP_SUMMARY
+          fi

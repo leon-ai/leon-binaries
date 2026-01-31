@@ -1,0 +1,92 @@
+{
+  "target_repo": "leon-ai/leon-binaries",
+  "leon_repo": {
+    "owner": "leon-ai",
+    "name": "leon",
+    "branch": "develop"
+  },
+  "binary_toolkit_mappings": {
+    "opencode": {
+      "toolkit_path": "bridges/toolkits/coding_development/toolkit.json",
+      "tool_name": "opencode"
+    },
+    "yt-dlp": {
+      "toolkit_path": "bridges/toolkits/video_streaming/toolkit.json",
+      "tool_name": "ytdlp"
+    }
+  },
+  "binaries": [
+    {
+      "name": "opencode",
+      "source_repo": "anomalyco/opencode",
+      "asset_mappings": [
+        {
+          "source_pattern": "opencode-linux-x64.tar.gz",
+          "target_os": "linux",
+          "target_arch": "x86_64",
+          "target_ext": "tar.gz"
+        },
+        {
+          "source_pattern": "opencode-linux-arm64.tar.gz",
+          "target_os": "linux",
+          "target_arch": "aarch64",
+          "target_ext": "tar.gz"
+        },
+        {
+          "source_pattern": "opencode-darwin-x64.zip",
+          "target_os": "macosx",
+          "target_arch": "x86_64",
+          "target_ext": "tar.gz"
+        },
+        {
+          "source_pattern": "opencode-darwin-arm64.zip",
+          "target_os": "macosx",
+          "target_arch": "arm64",
+          "target_ext": "tar.gz"
+        },
+        {
+          "source_pattern": "opencode-windows-x64.zip",
+          "target_os": "win",
+          "target_arch": "amd64",
+          "target_ext": "zip"
+        }
+      ]
+    },
+    {
+      "name": "yt-dlp",
+      "source_repo": "yt-dlp/yt-dlp",
+      "asset_mappings": [
+        {
+          "source_pattern": "yt-dlp_linux",
+          "target_os": "linux",
+          "target_arch": "x86_64",
+          "target_ext": ""
+        },
+        {
+          "source_pattern": "yt-dlp_linux_aarch64",
+          "target_os": "linux",
+          "target_arch": "aarch64",
+          "target_ext": ""
+        },
+        {
+          "source_pattern": "yt-dlp_macos",
+          "target_os": "macosx",
+          "target_arch": "x86_64",
+          "target_ext": ""
+        },
+        {
+          "source_pattern": "yt-dlp_macos",
+          "target_os": "macosx",
+          "target_arch": "arm64",
+          "target_ext": ""
+        },
+        {
+          "source_pattern": "yt-dlp.exe",
+          "target_os": "win",
+          "target_arch": "amd64",
+          "target_ext": "exe"
+        }
+      ]
+    }
+  ]
+}
