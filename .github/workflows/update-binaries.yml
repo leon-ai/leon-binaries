@@ -17,6 +17,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Show workflow trigger info
+        run: |
+          echo "Triggered by: ${{ github.event_name }}"
+          echo "Triggered at: $(date -u)"
+          echo "Workflow run: #${{ github.run_number }}"
+          echo "Actor: ${{ github.actor }}"
       
       - name: Set up Python
         uses: actions/setup-python@v5
