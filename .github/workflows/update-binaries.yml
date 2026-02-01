@@ -2,9 +2,8 @@ name: Update Third-Party Binaries
 
 on:
   schedule:
-    # Run daily at 7 AM UTC and 7 PM UTC
-    - cron: '0 7 * * *'
-    - cron: '0 19 * * *'
+    # Run weekly on Wednesdays at 7 PM UTC
+    - cron: '0 19 * * 3'
   workflow_dispatch: # Allow manual trigger
 
 permissions:
