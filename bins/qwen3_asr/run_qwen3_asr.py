@@ -519,7 +519,7 @@ class Qwen3ASRProcessor:
 
                         if timestamp_info:
                             transcription = (
-                                result.text + "\\n" + "\\n".join(timestamp_info)
+                                result.text + "\n" + "\n".join(timestamp_info)
                             )
 
                     result_dict = {
@@ -820,7 +820,7 @@ class Qwen3ASRProcessor:
                             f"[{ts['start']:.2f}-{ts['end']:.2f}s] {ts['text']}"
                         )
                     merged_transcription = (
-                        merged_transcription + "\\n" + "\\n".join(timestamp_lines)
+                        merged_transcription + "\n" + "\n".join(timestamp_lines)
                     )
             else:
                 merged_transcription = ""
