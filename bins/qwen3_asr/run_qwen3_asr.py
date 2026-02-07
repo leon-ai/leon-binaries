@@ -101,10 +101,12 @@ def _load_cuda_libraries(cuda_runtime_path):
             os.path.join(cuda_runtime_path, "cublas", "lib"),
             os.path.join(cuda_runtime_path, "cusparse", "lib"),
             os.path.join(cuda_runtime_path, "nccl", "lib"),
+            os.path.join(cuda_runtime_path, "nvshmem", "lib"),
         ]
         patterns = [
             "libcudnn.so.*", "libcublas.so.*", "libcusparseLt.so.*",
             "libcusparse.so.*", "libcudart.so.*", "libnccl.so.*",
+            "libnvshmem_host.so.*",
         ]
         path_var = "LD_LIBRARY_PATH"
 

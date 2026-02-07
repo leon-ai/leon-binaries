@@ -13,7 +13,7 @@ dependencies = [
     # PyTorch 2.3.0+ dropped support for macOS x86_64
     # All other platforms use 2.10.0
     "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "torch==2.10.0; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "torch==2.9.0; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "qwen-asr==0.0.6",
     "transformers==4.57.6",
     "numpy==1.26.4",
