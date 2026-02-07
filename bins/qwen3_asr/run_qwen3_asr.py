@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-wen3-ASR 1.7B - Speech Recognition CLI Tool (macOS Compatible)
+Qwen3-ASR 1.7B - Speech Recognition CLI Tool (Optimized)
 
 This module provides high-performance ASR inference using PyTorch.
 Compatible with Linux (CUDA), Linux (CPU), and macOS (CPU/MPS).
@@ -11,9 +11,7 @@ import sys
 import json
 import argparse
 import multiprocessing
-import contextlib
 import warnings
-from pathlib import Path
 
 # Suppress warnings early
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -30,37 +28,63 @@ def _parse_cuda_path_early():
     return None
 
 
-def _load_cuda_libraries(cuda_runtime_path):
-    """
-    Attempt to load CUDA libraries from the specified path or nvidia-* packages.
-    Returns True if libraries were successfully loaded.
+def _parse_torch_path_early():
+    """Parse --torch_path from argv before argparse runs."""
+    for i, arg in enumerate(sys.argv):
+        if arg == "--torch_path" and i + 1 < len(sys.argv):
+            return sys.argv[i + 1]
+    return None
 
-    NOTE: This function does nothing on macOS since macOS doesn't support CUDA.
+
+def _load_torch_from_path(torch_path):
     """
-    # SKIP CUDA LOADING ON MACOS
-    if sys.platform == "darwin":
+    Load PyTorch from a custom path by adding it to sys.path.
+    Returns True if torch was successfully loaded.
+    """
+    if not torch_path or not os.path.exists(torch_path):
+        if torch_path:
+            print(f"[Warning] PyTorch path does not exist: {torch_path}")
         return False
 
-    if cuda_runtime_path:
-        return _load_cuda_from_path(cuda_runtime_path)
-    if sys.platform.startswith("linux"):
-        return _load_cuda_from_nvidia_packages()
-    return False
+    # Add torch path to sys.path
+    if torch_path not in sys.path:
+        sys.path.insert(0, torch_path)
+        print(f"[Info] Added PyTorch path to sys.path: {torch_path}")
+
+    # Set library path for torch/lib
+    torch_lib_path = os.path.join(torch_path, "torch", "lib")
+    if os.path.exists(torch_lib_path):
+        if sys.platform.startswith("win"):
+            os.environ["PATH"] = torch_lib_path + os.pathsep + os.environ.get("PATH", "")
+        else:
+            path_var = "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
+            os.environ[path_var] = torch_lib_path + os.pathsep + os.environ.get(path_var, "")
+            print(f"[Info] Added torch/lib to {path_var}: {torch_lib_path}")
+
+    # Try to import torch
+    try:
+        import torch
+        print(f"[Info] Successfully loaded PyTorch {torch.__version__} from: {torch.__file__}")
+        return True
+    except ImportError as e:
+        print(f"[Error] Failed to import PyTorch from {torch_path}: {e}")
+        print(f"[Info] Expected: {torch_path}/torch/__init__.py and {torch_path}/torch/lib/")
+        return False
 
 
-def _load_cuda_from_path(cuda_runtime_path):
-    """Load CUDA libraries from a custom path (Linux/Windows only)."""
-    import ctypes
-    import glob
-
-    # Skip on macOS
-    if sys.platform == "darwin":
+def _load_cuda_libraries(cuda_runtime_path):
+    """Load CUDA libraries from the specified path."""
+    if sys.platform == "darwin" or not cuda_runtime_path:
         return False
 
     if not os.path.exists(cuda_runtime_path):
-        print(f"[Warning] CUDA runtime path invalid or not found: {cuda_runtime_path}")
+        print(f"[Warning] CUDA runtime path not found: {cuda_runtime_path}")
         return False
 
+    import ctypes
+    import glob
+
+    # Define paths and patterns based on platform
     if sys.platform.startswith("win"):
         cuda_paths = [
             os.path.join(cuda_runtime_path, "bin"),
@@ -68,6 +92,7 @@ def _load_cuda_from_path(cuda_runtime_path):
             os.path.join(cuda_runtime_path, "cublas", "bin"),
         ]
         patterns = ["cudnn*.dll", "cublas*.dll", "cusparse*.dll", "cudart*.dll"]
+        path_var = "PATH"
     else:  # Linux
         cuda_paths = [
             os.path.join(cuda_runtime_path, "lib64"),
@@ -78,30 +103,22 @@ def _load_cuda_from_path(cuda_runtime_path):
             os.path.join(cuda_runtime_path, "nccl", "lib"),
         ]
         patterns = [
-            "libcudnn.so.*",
-            "libcublas.so.*",
-            "libcusparseLt.so.*",
-            "libcusparse.so.*",
-            "libcudart.so.*",
-            "libnccl.so.*",
+            "libcudnn.so.*", "libcublas.so.*", "libcusparseLt.so.*",
+            "libcusparse.so.*", "libcudart.so.*", "libnccl.so.*",
         ]
+        path_var = "LD_LIBRARY_PATH"
 
+    # Filter valid paths
     valid_paths = [p for p in cuda_paths if os.path.exists(p)]
     if not valid_paths:
         print(f"[Warning] No valid CUDA library paths found in: {cuda_runtime_path}")
         return False
 
-    if sys.platform.startswith("win"):
-        os.environ["PATH"] = os.pathsep.join(valid_paths) + os.pathsep + os.environ.get(
-            "PATH", ""
-        )
-    else:
-        os.environ["LD_LIBRARY_PATH"] = os.pathsep.join(valid_paths) + os.pathsep + os.environ.get(
-            "LD_LIBRARY_PATH", ""
-        )
-
+    # Add to environment
+    os.environ[path_var] = os.pathsep.join(valid_paths) + os.pathsep + os.environ.get(path_var, "")
     print(f"[Info] Added CUDA libraries to path: {', '.join(valid_paths)}")
 
+    # Pre-load libraries
     loaded = []
     for base in valid_paths:
         for pattern in patterns:
@@ -121,65 +138,11 @@ def _load_cuda_from_path(cuda_runtime_path):
     return False
 
 
-def _load_cuda_from_nvidia_packages():
-    """Load CUDA libraries from nvidia-* Python packages (Linux only)."""
-    # Skip on macOS or non-Linux platforms
-    if not sys.platform.startswith("linux"):
-        return False
-
-    try:
-        import ctypes
-        import nvidia.cublas
-        import nvidia.cudnn
-        import nvidia.cusparse
-
-        def _lib_dir(module):
-            if getattr(module, "__file__", None):
-                return os.path.join(os.path.dirname(module.__file__), "lib")
-            if hasattr(module, "__path__"):
-                return os.path.join(list(module.__path__)[0], "lib")
-            return ""
-
-        lib_dirs = [_lib_dir(nvidia.cudnn), _lib_dir(nvidia.cublas), _lib_dir(nvidia.cusparse)]
-        lib_dirs = [p for p in lib_dirs if p]
-        if not lib_dirs:
-            return False
-
-        os.environ["LD_LIBRARY_PATH"] = os.pathsep.join(lib_dirs) + os.pathsep + os.environ.get(
-            "LD_LIBRARY_PATH", ""
-        )
-
-        ctypes.CDLL(os.path.join(lib_dirs[0], "libcudnn.so.9"), mode=ctypes.RTLD_GLOBAL)
-        ctypes.CDLL(os.path.join(lib_dirs[1], "libcublas.so.12"), mode=ctypes.RTLD_GLOBAL)
-        ctypes.CDLL(os.path.join(lib_dirs[2], "libcusparseLt.so.0"), mode=ctypes.RTLD_GLOBAL)
-        print("[Info] Loaded CUDA libs from nvidia-* packages")
-        return True
-    except Exception:
-        return False
-
-
-
-
-# Parse CUDA path early and setup environment (will be skipped on macOS)
+# Parse and load early
 _cuda_runtime_path = _parse_cuda_path_early()
 _cuda_env_setup = _load_cuda_libraries(_cuda_runtime_path)
-
-
-@contextlib.contextmanager
-def suppress_stderr():
-    """Redirects stderr to devnull at the C-level."""
-    try:
-        err_fd = sys.stderr.fileno()
-        save_err = os.dup(err_fd)
-        with open(os.devnull, "w") as devnull:
-            os.dup2(devnull.fileno(), err_fd)
-            try:
-                yield
-            finally:
-                os.dup2(save_err, err_fd)
-                os.close(save_err)
-    except (AttributeError, ValueError, IOError, OSError):
-        yield
+_torch_path = _parse_torch_path_early()
+_torch_loaded = _load_torch_from_path(_torch_path)
 
 
 def configure_torch_threads():
@@ -187,18 +150,10 @@ def configure_torch_threads():
     import torch
 
     total_cores = os.cpu_count() or 4
-
-    # Smart thread allocation based on core count
-    if total_cores >= 8:
-        num_threads = total_cores - 2
-    elif total_cores >= 4:
-        num_threads = total_cores - 1
-    else:
-        num_threads = max(1, total_cores // 2)
+    num_threads = max(1, total_cores - 2) if total_cores >= 8 else max(1, total_cores - 1) if total_cores >= 4 else max(1, total_cores // 2)
 
     torch.set_num_threads(num_threads)
     torch.set_num_interop_threads(1)
-
     return num_threads
 
 
@@ -231,49 +186,35 @@ class Qwen3ASRProcessor:
 
         self._load_model()
 
-    def _get_available_memory_bytes(self):
-        """Return available system memory in bytes if possible."""
+    def _get_adaptive_cpu_batch_size(self):
+        """Adapt CPU batch size based on available memory."""
+        base = max(1, min(self.cpu_batch_size or 2, self.batch_size))
+
+        # Try to get available memory
         if hasattr(os, "sysconf"):
             try:
                 pages = os.sysconf("SC_AVPHYS_PAGES")
                 page_size = os.sysconf("SC_PAGE_SIZE")
                 if isinstance(pages, int) and isinstance(page_size, int):
-                    return pages * page_size
+                    mem_gb = (pages * page_size) / (1024 ** 3)
+                    extra = 2 if mem_gb >= 32 else 1 if mem_gb >= 20 else 0
+                    adaptive = min(self.batch_size, base + extra, 8)
+                    if adaptive != base:
+                        print(f"[Info] CPU batch size adjusted based on RAM: {base} -> {adaptive}")
+                    return adaptive
             except (ValueError, OSError, AttributeError):
-                return None
-        return None
+                pass
 
-    def _get_adaptive_cpu_batch_size(self):
-        """Adapt CPU batch size based on available memory headroom."""
-        base = max(1, min(self.cpu_batch_size or 2, self.batch_size))
-        mem_bytes = self._get_available_memory_bytes()
-        if mem_bytes is None:
-            return base
-
-        mem_gb = mem_bytes / (1024 ** 3)
-        extra = 0
-        if mem_gb >= 32:
-            extra = 2
-        elif mem_gb >= 20:
-            extra = 1
-
-        adaptive = min(self.batch_size, base + extra, 8)
-        if adaptive != base:
-            print(
-                f"[Info] CPU batch size adjusted based on RAM: {base} -> {adaptive}"
-            )
-        return adaptive
+        return base
 
     def _load_model(self):
-        """Load the Qwen3-ASR model using the correct qwen_asr package."""
+        """Load the Qwen3-ASR model."""
         import torch
 
         try:
             from qwen_asr import Qwen3ASRModel
         except ImportError as e:
-            print(
-                f"[Error] qwen_asr package not found. Please install it with: pip install qwen-asr"
-            )
+            print(f"[Error] qwen_asr package not found. Please install it with: pip install qwen-asr")
             print(f"[Error] Import error: {e}")
             raise
 
@@ -283,65 +224,44 @@ class Qwen3ASRProcessor:
 
         # Determine device
         if self.device == "auto":
-            # MACOS: Use "mps" if available (Apple Silicon), otherwise "cpu"
             if sys.platform == "darwin":
-                if torch.backends.mps.is_available():
-                    self.device_type = "mps"
-                    print("[Info] macOS: Using MPS (Metal Performance Shaders)")
-                else:
-                    self.device_type = "cpu"
-                    print("[Info] macOS: Using CPU")
-            else:  # Linux/Windows
+                self.device_type = "mps" if torch.backends.mps.is_available() else "cpu"
+                print(f"[Info] macOS: Using {'MPS (Metal)' if self.device_type == 'mps' else 'CPU'}")
+            else:
                 self.device_type = "cuda" if torch.cuda.is_available() else "cpu"
         else:
             self.device_type = self.device
+            if self.device_type == "cuda" and sys.platform == "darwin":
+                print("[Warning] CUDA not supported on macOS. Falling back to CPU.")
+                self.device_type = "cpu"
 
-        # MACOS: Warn if CUDA is requested on macOS
-        if self.device_type == "cuda" and sys.platform == "darwin":
-            print("[Warning] CUDA requested but macOS does not support CUDA. Falling back to CPU.")
-            self.device_type = "cpu"
-
-        # Check if CUDA runtime path is provided but CUDA is not available
+        # Check CUDA availability
         if self.device_type == "cuda" and not torch.cuda.is_available():
-            print("[Error] CUDA requested but not available. Check CUDA installation.")
-            print(
-                "[Info] You may need to use --cuda_runtime_path to specify CUDA location"
-            )
+            print("[Error] CUDA requested but not available. Use --cuda_runtime_path or --device cpu")
             raise RuntimeError("CUDA not available")
 
         print(f"[Info] Using device: {self.device_type}")
 
-        # Configure threading for CPU mode
+        # Configure device-specific settings
         if self.device_type == "cpu":
             self.num_threads = configure_torch_threads()
             print(f"[Info] CPU Mode: Using {self.num_threads} threads")
-            # Enable MKL optimizations (if available, not on ARM Macs)
             if hasattr(torch.backends, 'mkldnn'):
                 torch.backends.mkldnn.enabled = True
-            # Set a reasonable default CPU batch size based on cores
             if self.cpu_batch_size is None:
                 total_cores = os.cpu_count() or 4
-                if total_cores >= 16:
-                    self.cpu_batch_size = 4
-                elif total_cores >= 8:
-                    self.cpu_batch_size = 3
-                else:
-                    self.cpu_batch_size = 2
+                self.cpu_batch_size = 4 if total_cores >= 16 else 3 if total_cores >= 8 else 2
         elif self.device_type == "mps":
-            # MACOS: MPS specific settings
             print(f"[Info] MPS Mode: Using Apple Metal acceleration")
-            # MPS doesn't support all operations, so we may need to fall back to CPU for some
             os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-        else:
-            # GPU optimizations (CUDA only)
+        else:  # CUDA
             torch.backends.cudnn.benchmark = True
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
             print(f"[Info] GPU Mode: {torch.cuda.get_device_name(0)}")
-            # Clear cache before loading
             torch.cuda.empty_cache()
 
-        # Load model using transformers backend
+        # Load model
         print("[Info] Loading model (this may take a while)...")
         try:
             model_kwargs = {
@@ -353,14 +273,12 @@ class Qwen3ASRProcessor:
                 model_kwargs["dtype"] = torch.bfloat16
                 model_kwargs["device_map"] = "cuda:0"
             elif self.device_type == "mps":
-                # MACOS: MPS doesn't support bfloat16 well, use float16 or float32
                 model_kwargs["dtype"] = torch.float16
                 model_kwargs["device_map"] = "mps"
             else:
                 model_kwargs["dtype"] = torch.float32
                 model_kwargs["device_map"] = "cpu"
 
-            # Add ForcedAligner for timestamps if requested
             if self.return_timestamps and self.forced_aligner_model_path:
                 model_kwargs["forced_aligner"] = self.forced_aligner_model_path
                 model_kwargs["forced_aligner_kwargs"] = {
@@ -368,11 +286,8 @@ class Qwen3ASRProcessor:
                     "device_map": model_kwargs["device_map"],
                 }
 
-            # For local paths, we need to handle them differently
             if os.path.exists(self.model_path) and os.path.isdir(self.model_path):
-                # Check if this is a local model directory
                 if os.path.exists(os.path.join(self.model_path, "config.json")):
-                    # Use local_files_only for local models
                     model_kwargs["local_files_only"] = True
 
             self.model = Qwen3ASRModel.from_pretrained(self.model_path, **model_kwargs)
@@ -382,56 +297,24 @@ class Qwen3ASRProcessor:
 
         print("[Info] Model loaded successfully")
 
-    def load_audio(self, audio_path):
-        """Load and preprocess audio file."""
-        import librosa
-        import soundfile as sf
-
-        # Load audio with librosa
-        audio, sr = librosa.load(audio_path, sr=16000, mono=True)
-
-        return audio, sr
-
     def transcribe_single(self, audio_path, language=None, context=None):
-        """Transcribe a single audio file using Qwen3-ASR API."""
-        # Determine language for transcription
-        lang = language or self.language
-        if lang == "auto" or not lang:
-            lang_param = None  # Let model auto-detect
-        else:
-            lang_param = lang
+        """Transcribe a single audio file."""
+        lang = None if (language or self.language) in ("auto", None) else (language or self.language)
+        transcribe_kwargs = {"return_time_stamps": True} if self.return_timestamps else {}
 
-        # Prepare transcription parameters
-        transcribe_kwargs = {}
-
-        if self.return_timestamps:
-            transcribe_kwargs["return_time_stamps"] = True
-
-        # Transcribe using Qwen3-ASR API
         try:
-            results = self.model.transcribe(
-                audio=audio_path, language=lang_param, **transcribe_kwargs
-            )
+            results = self.model.transcribe(audio=audio_path, language=lang, **transcribe_kwargs)
 
-            # Extract the first result (for single file)
             if results and len(results) > 0:
                 result = results[0]
                 transcription = result.text
-                detected_lang = getattr(result, "language", lang_param or "unknown")
+                detected_lang = getattr(result, "language", lang or "unknown")
 
-                # Handle timestamps if requested
-                if (
-                    self.return_timestamps
-                    and hasattr(result, "time_stamps")
-                    and result.time_stamps
-                ):
-                    # Include timestamp information in the output
-                    timestamp_info = f" [Timestamps: {result.time_stamps[0]}]"
-                    transcription += timestamp_info
+                if self.return_timestamps and hasattr(result, "time_stamps") and result.time_stamps:
+                    transcription += f" [Timestamps: {result.time_stamps[0]}]"
             else:
                 transcription = ""
                 detected_lang = "unknown"
-
         except Exception as e:
             print(f"[Error] Transcription failed for {audio_path}: {e}")
             transcription = ""
@@ -440,87 +323,49 @@ class Qwen3ASRProcessor:
         return {"text": transcription, "language": detected_lang}
 
     def transcribe_batch(self, tasks):
-        """Transcribe multiple audio files in batches using Qwen3-ASR API."""
+        """Transcribe multiple audio files in batches."""
         print(f"[Info] Processing {len(tasks)} tasks with batch optimization...")
 
-        # Initialize results list
         results = []
-
-        # Prepare batch data for Qwen3-ASR
         audio_paths = []
         languages = []
-        task_mapping = []  # Map batch results back to original tasks
+        task_mapping = []
 
-        # Filter out tasks with missing audio files
-        valid_tasks = []
+        # Filter valid tasks
         for task in tasks:
             if os.path.exists(task.get("audio_path", "")):
-                valid_tasks.append(task)
                 audio_paths.append(task["audio_path"])
-
-                # Determine language for this task
                 lang = task.get("language", self.language)
-                if lang == "auto" or not lang:
-                    languages.append(None)
-                else:
-                    languages.append(lang)
-
+                languages.append(None if lang in ("auto", None) else lang)
                 task_mapping.append(task)
             else:
-                print(
-                    f"[Warning] Audio file not found: {task.get('audio_path', 'unknown')}"
-                )
-                results.append(
-                    {
-                        "audio_path": task.get("audio_path", ""),
-                        "error": "Audio file not found",
-                        "text": "",
-                        "language": "",
-                    }
-                )
+                print(f"[Warning] Audio file not found: {task.get('audio_path', 'unknown')}")
+                results.append({
+                    "audio_path": task.get("audio_path", ""),
+                    "error": "Audio file not found",
+                    "text": "",
+                    "language": "",
+                })
 
         if not audio_paths:
             return results
 
-        # Single batch processing using Qwen3-ASR's native batch support
         print(f"[Info] Processing all {len(audio_paths)} audio files in one batch...")
 
         try:
-            # Prepare transcription parameters
-            transcribe_kwargs = {}
-            if self.return_timestamps:
-                transcribe_kwargs["return_time_stamps"] = True
+            transcribe_kwargs = {"return_time_stamps": True} if self.return_timestamps else {}
+            batch_results = self.model.transcribe(audio=audio_paths, language=languages, **transcribe_kwargs)
 
-            # Use Qwen3-ASR's native batch processing - this is much more efficient!
-            batch_results = self.model.transcribe(
-                audio=audio_paths, language=languages, **transcribe_kwargs
-            )
-
-            # Process results and map back to original tasks
             for idx, task in enumerate(task_mapping):
                 if idx < len(batch_results):
                     result = batch_results[idx]
                     transcription = result.text
-                    detected_lang = getattr(
-                        result, "language", languages[idx] or "unknown"
-                    )
+                    detected_lang = getattr(result, "language", languages[idx] or "unknown")
 
-                    # Handle timestamps if requested
-                    if (
-                        self.return_timestamps
-                        and hasattr(result, "time_stamps")
-                        and result.time_stamps
-                    ):
-                        timestamp_info = []
-                        for ts in result.time_stamps:
-                            timestamp_info.append(
-                                f"[{ts.start_time:.2f}-{ts.end_time:.2f}s] {ts.text}"
-                            )
-
+                    if self.return_timestamps and hasattr(result, "time_stamps") and result.time_stamps:
+                        timestamp_info = [f"[{ts.start_time:.2f}-{ts.end_time:.2f}s] {ts.text}" for ts in result.time_stamps]
                         if timestamp_info:
-                            transcription = (
-                                result.text + "\n" + "\n".join(timestamp_info)
-                            )
+                            transcription = result.text + "\n" + "\n".join(timestamp_info)
 
                     result_dict = {
                         "audio_path": task["audio_path"],
@@ -528,161 +373,95 @@ class Qwen3ASRProcessor:
                         "language": detected_lang,
                     }
 
-                    # Write output if specified
                     if task.get("output_path"):
-                        output_dir = os.path.dirname(task["output_path"])
-                        os.makedirs(output_dir, exist_ok=True)
+                        os.makedirs(os.path.dirname(task["output_path"]), exist_ok=True)
                         with open(task["output_path"], "w", encoding="utf-8") as f:
                             f.write(transcription)
                         print(f"[Info] Saved transcription to: {task['output_path']}")
 
                     results.append(result_dict)
                 else:
-                    # No result for this task
-                    results.append(
-                        {
-                            "audio_path": task["audio_path"],
-                            "error": "No transcription result",
-                            "text": "",
-                            "language": "",
-                        }
-                    )
-
-        except Exception as e:
-            print(f"[Error] Batch transcription failed: {e}")
-            # Add error results for all tasks in this batch
-            for task in task_mapping:
-                results.append(
-                    {
+                    results.append({
                         "audio_path": task["audio_path"],
-                        "error": str(e),
+                        "error": "No transcription result",
                         "text": "",
                         "language": "",
-                    }
-                )
+                    })
+        except Exception as e:
+            print(f"[Error] Batch transcription failed: {e}")
+            for task in task_mapping:
+                results.append({
+                    "audio_path": task["audio_path"],
+                    "error": str(e),
+                    "text": "",
+                    "language": "",
+                })
 
         return results
 
-    def transcribe_long_audio(
-        self, audio_path, language=None, context=None, chunk_duration=None
-    ):
-        """Transcribe long audio files by automatically chunking them."""
+    def transcribe_long_audio(self, audio_path, language=None, context=None, chunk_duration=None):
+        """Transcribe long audio files by chunking them."""
         import librosa
+        import soundfile as sf
         import tempfile
 
-        # Determine language for transcription
-        lang = language or self.language
-        if lang == "auto" or not lang:
-            lang_param = None  # Let model auto-detect
-        else:
-            lang_param = lang
+        lang = None if (language or self.language) in ("auto", None) else (language or self.language)
+        chunk_duration = chunk_duration or self.chunk_duration
 
         print(f"[Info] Processing long audio: {audio_path}")
 
         try:
-            # Resolve chunk duration
-            if chunk_duration is None:
-                chunk_duration = self.chunk_duration
-
-            # Load audio to get duration
             audio, sr = librosa.load(audio_path, sr=16000, mono=True)
             duration = librosa.get_duration(y=audio, sr=sr)
 
             if duration <= chunk_duration:
                 print(f"[Info] Audio is {duration:.1f}s, processing without chunking")
-                # Just use regular transcribe for short audio
-                result = self.transcribe_single(audio_path, language, context)
-                return result
+                return self.transcribe_single(audio_path, language, context)
 
-            print(
-                f"[Info] Audio is {duration:.1f}s, auto-chunking into {chunk_duration}s segments"
-            )
+            print(f"[Info] Audio is {duration:.1f}s, auto-chunking into {chunk_duration}s segments")
 
             temp_dir = None
             chunk_starts = []
             chunk_files = []
             chunk_arrays = []
-            use_cpu_arrays = (
-                self.device_type == "cpu" and self._supports_array_input is not False
-            )
+            use_cpu_arrays = self.device_type == "cpu" and self._supports_array_input is not False
 
             # Split audio into chunks
             for i in range(0, int(duration), chunk_duration):
                 start_time = i
                 end_time = min(i + chunk_duration, duration)
                 chunk_starts.append(start_time)
+                chunk_audio = audio[int(start_time * sr):int(end_time * sr)]
 
-                # Extract chunk
-                chunk_audio = audio[int(start_time * sr) : int(end_time * sr)]
-
-                if self.device_type == "cuda":
-                    # GPU path uses temp files
+                if self.device_type == "cuda" or not use_cpu_arrays:
                     if temp_dir is None:
                         temp_dir = tempfile.TemporaryDirectory()
-                    chunk_path = os.path.join(
-                        temp_dir.name, f"chunk_{i:03d}_{int(end_time):03d}.wav"
-                    )
-
-                    # Save chunk
-                    import soundfile as sf
-
+                    chunk_path = os.path.join(temp_dir.name, f"chunk_{i:03d}_{int(end_time):03d}.wav")
                     sf.write(chunk_path, chunk_audio, sr)
                     chunk_files.append(chunk_path)
                     chunk_label = len(chunk_files)
-                elif use_cpu_arrays:
-                    # CPU path keeps chunks in memory to avoid disk I/O
+                else:
                     chunk_arrays.append(chunk_audio)
                     chunk_label = len(chunk_arrays)
-                else:
-                    # CPU path uses temp files when arrays are unsupported
-                    if temp_dir is None:
-                        temp_dir = tempfile.TemporaryDirectory()
-                    chunk_path = os.path.join(
-                        temp_dir.name, f"chunk_{i:03d}_{int(end_time):03d}.wav"
-                    )
-                    import soundfile as sf
 
-                    sf.write(chunk_path, chunk_audio, sr)
-                    chunk_files.append(chunk_path)
-                    chunk_label = len(chunk_files)
+                print(f"[Info] Created chunk {chunk_label}: {start_time:.1f}s-{end_time:.1f}s")
 
-                print(
-                    f"[Info] Created chunk {chunk_label}: {start_time:.1f}s-{end_time:.1f}s"
-                )
+            # Process chunks
+            transcribe_kwargs = {"return_time_stamps": self.return_timestamps}
+            chunk_transcriptions = []
+            all_timestamps = []
+            detected_lang = "unknown"
 
-            # Process chunks based on device type
             if self.device_type == "cuda":
-                # GPU: Use batch processing for faster inference
-                print(
-                    f"[Info] Transcribing {len(chunk_files)} chunks in batch (GPU)..."
-                )
+                print(f"[Info] Transcribing {len(chunk_files)} chunks in batch (GPU)...")
+                batch_results = self.model.transcribe(audio=chunk_files, language=None, **transcribe_kwargs)
 
-                transcribe_kwargs = {}
-                if self.return_timestamps:
-                    transcribe_kwargs["return_time_stamps"] = True
-
-                # Transcribe all chunks in a single batch call
-                batch_results = self.model.transcribe(
-                    audio=chunk_files,
-                    language=None,  # Auto-detect for chunks
-                    **transcribe_kwargs,
-                )
-
-                # Process batch results
-                chunk_transcriptions = []
-                all_timestamps = []  # Collect timestamps from all chunks
                 for i, result in enumerate(batch_results):
                     if result.text:
                         chunk_transcriptions.append(result.text)
-                        print(
-                            f"[Info] Chunk {i + 1}/{len(chunk_files)} transcribed successfully"
-                        )
-                        # Collect timestamps with adjusted times
-                        if (
-                            self.return_timestamps
-                            and hasattr(result, "time_stamps")
-                            and result.time_stamps
-                        ):
+                        print(f"[Info] Chunk {i + 1}/{len(chunk_files)} transcribed successfully")
+
+                        if self.return_timestamps and hasattr(result, "time_stamps") and result.time_stamps:
                             chunk_start = i * chunk_duration
                             for ts in result.time_stamps:
                                 all_timestamps.append({
@@ -691,27 +470,12 @@ class Qwen3ASRProcessor:
                                     "text": ts.text,
                                 })
                     else:
-                        print(
-                            f"[Warning] Chunk {i + 1}/{len(chunk_files)} failed to transcribe"
-                        )
+                        print(f"[Warning] Chunk {i + 1}/{len(chunk_files)} failed to transcribe")
 
-                # Detect language from first successful chunk
-                detected_lang = "unknown"
-                for result in batch_results:
-                    if (
-                        getattr(result, "language", None)
-                        and result.language != "unknown"
-                    ):
-                        detected_lang = result.language
-                        break
+                detected_lang = next((r.language for r in batch_results if getattr(r, "language", None) and r.language != "unknown"), "unknown")
             else:
-                # CPU: Process chunks in small batches for better utilization
+                # CPU batch processing
                 cpu_batch_size = self._get_adaptive_cpu_batch_size()
-                chunk_transcriptions = []
-                all_timestamps = []  # Collect timestamps from all chunks
-                detected_lang = "unknown"
-
-                transcribe_kwargs = {"return_time_stamps": self.return_timestamps}
 
                 def process_cpu_batches(batch_inputs, total_count):
                     nonlocal detected_lang
@@ -719,11 +483,7 @@ class Qwen3ASRProcessor:
                         batch_end = min(batch_start + cpu_batch_size, total_count)
                         batch_items = batch_inputs[batch_start:batch_end]
 
-                        batch_results = self.model.transcribe(
-                            audio=batch_items,
-                            language=None,  # Auto-detect for chunks
-                            **transcribe_kwargs,
-                        )
+                        batch_results = self.model.transcribe(audio=batch_items, language=None, **transcribe_kwargs)
 
                         for idx_in_batch, result in enumerate(batch_results):
                             chunk_idx = batch_start + idx_in_batch
@@ -731,101 +491,66 @@ class Qwen3ASRProcessor:
 
                             if result.text:
                                 chunk_transcriptions.append(result.text)
-                                print(
-                                    f"[Info] Chunk {chunk_idx + 1}/{total_count} transcribed successfully"
-                                )
+                                print(f"[Info] Chunk {chunk_idx + 1}/{total_count} transcribed successfully")
 
-                                if (
-                                    self.return_timestamps
-                                    and hasattr(result, "time_stamps")
-                                    and result.time_stamps
-                                ):
+                                if self.return_timestamps and hasattr(result, "time_stamps") and result.time_stamps:
                                     for ts in result.time_stamps:
-                                        all_timestamps.append(
-                                            {
-                                                "start": chunk_start_time + ts.start_time,
-                                                "end": chunk_start_time + ts.end_time,
-                                                "text": ts.text,
-                                            }
-                                        )
+                                        all_timestamps.append({
+                                            "start": chunk_start_time + ts.start_time,
+                                            "end": chunk_start_time + ts.end_time,
+                                            "text": ts.text,
+                                        })
 
                                 if detected_lang == "unknown":
                                     lang = getattr(result, "language", None)
                                     if lang and lang != "unknown":
                                         detected_lang = lang
                             else:
-                                print(
-                                    f"[Warning] Chunk {chunk_idx + 1}/{total_count} failed to transcribe"
-                                )
+                                print(f"[Warning] Chunk {chunk_idx + 1}/{total_count} failed to transcribe")
 
                 if chunk_arrays:
-                    print(
-                        f"[Info] Transcribing {len(chunk_arrays)} chunks in batches of {cpu_batch_size} (CPU)..."
-                    )
+                    print(f"[Info] Transcribing {len(chunk_arrays)} chunks in batches of {cpu_batch_size} (CPU)...")
                     try:
-                        # In-memory batches avoid disk I/O on CPU
                         process_cpu_batches(chunk_arrays, len(chunk_arrays))
                     except Exception as e:
                         if "Unsupported audio input type" in str(e):
                             self._supports_array_input = False
-                            print(
-                                "[Info] Backend does not support in-memory audio; "
-                                "falling back to temp files."
-                            )
+                            print("[Info] Backend does not support in-memory audio; falling back to temp files.")
                         else:
-                            print(
-                                f"[Warning] In-memory CPU batching failed, falling back to temp files: {e}"
-                            )
+                            print(f"[Warning] In-memory CPU batching failed, falling back to temp files: {e}")
 
-                        # Reset partial results
                         chunk_transcriptions = []
                         all_timestamps = []
                         detected_lang = "unknown"
 
-                        # Fallback: write chunks to temp files and retry
                         if temp_dir is None:
                             temp_dir = tempfile.TemporaryDirectory()
                         chunk_files = []
-                        import soundfile as sf
 
                         for idx, chunk_audio in enumerate(chunk_arrays):
                             end_time = min(chunk_starts[idx] + chunk_duration, duration)
-                            chunk_path = os.path.join(
-                                temp_dir.name,
-                                f"chunk_{chunk_starts[idx]:03d}_{int(end_time):03d}.wav",
-                            )
+                            chunk_path = os.path.join(temp_dir.name, f"chunk_{chunk_starts[idx]:03d}_{int(end_time):03d}.wav")
                             sf.write(chunk_path, chunk_audio, sr)
                             chunk_files.append(chunk_path)
 
-                        print(
-                            f"[Info] Transcribing {len(chunk_files)} chunks in batches of {cpu_batch_size} (CPU)..."
-                        )
+                        print(f"[Info] Transcribing {len(chunk_files)} chunks in batches of {cpu_batch_size} (CPU)...")
                         process_cpu_batches(chunk_files, len(chunk_files))
                 else:
-                    print(
-                        f"[Info] Transcribing {len(chunk_files)} chunks in batches of {cpu_batch_size} (CPU)..."
-                    )
+                    print(f"[Info] Transcribing {len(chunk_files)} chunks in batches of {cpu_batch_size} (CPU)...")
                     process_cpu_batches(chunk_files, len(chunk_files))
 
-            # Merge all chunk transcriptions
+            # Merge results
             if chunk_transcriptions:
                 merged_transcription = " ".join(chunk_transcriptions).strip()
                 print(f"[Info] Merged {len(chunk_transcriptions)} chunk transcriptions")
 
-                # Add timestamps if collected
                 if all_timestamps:
-                    timestamp_lines = []
-                    for ts in all_timestamps:
-                        timestamp_lines.append(
-                            f"[{ts['start']:.2f}-{ts['end']:.2f}s] {ts['text']}"
-                        )
-                    merged_transcription = (
-                        merged_transcription + "\n" + "\n".join(timestamp_lines)
-                    )
+                    timestamp_lines = [f"[{ts['start']:.2f}-{ts['end']:.2f}s] {ts['text']}" for ts in all_timestamps]
+                    merged_transcription = merged_transcription + "\n" + "\n".join(timestamp_lines)
             else:
                 merged_transcription = ""
 
-            # Clean up temporary directory
+            # Cleanup
             if temp_dir is not None:
                 try:
                     temp_dir.cleanup()
@@ -834,15 +559,9 @@ class Qwen3ASRProcessor:
 
         except Exception as e:
             print(f"[Error] Long audio processing failed: {e}")
-            return {
-                "text": "",
-                "language": "unknown",
-            }
+            return {"text": "", "language": "unknown"}
 
-        return {
-            "text": merged_transcription,
-            "language": detected_lang,
-        }
+        return {"text": merged_transcription, "language": detected_lang}
 
 
 def main():
@@ -853,100 +572,50 @@ def main():
         description="Qwen3-ASR 1.7B - Speech Recognition CLI Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
- Examples:
+Examples:
   # Basic usage
-  python run_qwen3_asr.py --function transcribe_audio --json_file tasks.json --model_path /path/to/model
+  qwen3_asr --function transcribe_audio --json_file tasks.json --model_path /path/to/model
   
-  # With timestamps using ForcedAligner
-  python run_qwen3_asr.py --function transcribe_audio --json_file tasks.json --model_path /path/to/model --return_timestamps true --forced_aligner_model_path Qwen/Qwen3-ForcedAligner-0.6B
+  # With external PyTorch
+  qwen3_asr --function transcribe_audio --json_file tasks.json --model_path /path/to/model --torch_path /path/to/torch
   
-  # With custom CUDA runtime path (Linux/Windows only)
-  python run_qwen3_asr.py --function transcribe_audio --json_file tasks.json --model_path /path/to/model --cuda_runtime_path /usr/local/cuda
+  # With CUDA (Linux/Windows only)
+  qwen3_asr --function transcribe_audio --json_file tasks.json --model_path /path/to/model --cuda_runtime_path /usr/local/cuda
   
-  # macOS usage (CUDA arguments are ignored)
-  python run_qwen3_asr.py --function transcribe_audio --json_file tasks.json --model_path /path/to/model --device cpu
+  # With timestamps
+  qwen3_asr --function transcribe_audio --json_file tasks.json --model_path /path/to/model --return_timestamps true --forced_aligner_model_path Qwen/Qwen3-ForcedAligner-0.6B
         """,
     )
 
-    parser.add_argument(
-        "--function",
-        type=str,
-        required=True,
-        choices=["transcribe_audio"],
-        help="Function to execute",
-    )
-    parser.add_argument(
-        "--json_file",
-        type=str,
-        required=True,
-        help="Path to JSON file with transcription tasks",
-    )
-    parser.add_argument(
-        "--model_path",
-        type=str,
-        required=True,
-        help="Path to local Qwen3-ASR model directory",
-    )
-    parser.add_argument(
-        "--device",
-        type=str,
-        default="auto",
-        choices=["auto", "cuda", "cpu"],
-        help="Device to use for inference (default: auto). Note: macOS only supports 'cpu' or 'auto' (which defaults to 'mps' if available, otherwise 'cpu')",
-    )
-    parser.add_argument(
-        "--batch_size",
-        type=int,
-        default=4,
-        help="Batch size for processing (default: 4)",
-    )
-    parser.add_argument(
-        "--language",
-        type=str,
-        default="auto",
-        help="Language code for transcription (default: auto)",
-    )
-    parser.add_argument(
-        "--return_timestamps",
-        type=str,
-        default="true",
-        choices=["true", "false"],
-        help="Return timestamps in output (default: true)",
-    )
-    parser.add_argument(
-        "--cuda_runtime_path",
-        type=str,
-        default=None,
-        help="Path to CUDA runtime directory (Linux/Windows only, ignored on macOS)",
-    )
-    parser.add_argument(
-        "--forced_aligner_model_path",
-        type=str,
-        default=None,
-        help="Path to ForcedAligner model for timestamp generation (e.g., Qwen/Qwen3-ForcedAligner-0.6B)",
-    )
-    parser.add_argument(
-        "--chunk_duration",
-        type=int,
-        default=30,
-        help="Chunk duration in seconds for long audio (default: 30)",
-    )
-    parser.add_argument(
-        "--cpu_batch_size",
-        type=int,
-        default=None,
-        help="CPU batch size for long audio (default: auto based on cores)",
-    )
+    parser.add_argument("--function", type=str, required=True, choices=["transcribe_audio"], help="Function to execute")
+    parser.add_argument("--json_file", type=str, required=True, help="Path to JSON file with transcription tasks")
+    parser.add_argument("--model_path", type=str, required=True, help="Path to local Qwen3-ASR model directory")
+    parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "cpu"], help="Device to use for inference (default: auto)")
+    parser.add_argument("--batch_size", type=int, default=4, help="Batch size for processing (default: 4)")
+    parser.add_argument("--language", type=str, default="auto", help="Language code for transcription (default: auto)")
+    parser.add_argument("--return_timestamps", type=str, default="true", choices=["true", "false"], help="Return timestamps in output (default: true)")
+    parser.add_argument("--cuda_runtime_path", type=str, default=None, help="Path to CUDA runtime directory (Linux/Windows only)")
+    parser.add_argument("--torch_path", type=str, default=None, help="Path to PyTorch installation directory (site-packages containing torch)")
+    parser.add_argument("--forced_aligner_model_path", type=str, default=None, help="Path to ForcedAligner model for timestamp generation")
+    parser.add_argument("--chunk_duration", type=int, default=30, help="Chunk duration in seconds for long audio (default: 30)")
+    parser.add_argument("--cpu_batch_size", type=int, default=None, help="CPU batch size for long audio (default: auto)")
 
     args = parser.parse_args()
 
-    # Handle CUDA runtime path if provided (ignored on macOS)
+    # Handle CUDA runtime path
     if args.cuda_runtime_path and not _cuda_env_setup:
         if sys.platform == "darwin":
             print("[Info] --cuda_runtime_path is ignored on macOS (CUDA not supported)")
         else:
             print(f"[Info] Setting up CUDA runtime from: {args.cuda_runtime_path}")
             _load_cuda_libraries(args.cuda_runtime_path)
+
+    # Handle PyTorch path
+    if args.torch_path and not _torch_loaded:
+        print(f"[Info] Loading PyTorch from: {args.torch_path}")
+        if not _load_torch_from_path(args.torch_path):
+            print("[Error] Failed to load PyTorch from the specified path")
+            sys.exit(1)
 
     # Validate arguments
     if not os.path.exists(args.json_file):
@@ -986,40 +655,33 @@ def main():
     except Exception as e:
         print(f"[Error] Failed to initialize processor: {e}")
         import traceback
-
         traceback.print_exc()
         sys.exit(1)
 
     # Process tasks
-    success_count = 0
-    error_count = 0
-
-    print(f"\\n[Info] Starting transcription...")
-    print(f"[Info] Batch size: {args.batch_size}")
-    print(f"[Info] Language: {args.language}")
-
-    # Check for long audio files
     import librosa
 
+    success_count = 0
+    error_count = 0
     long_audio_tasks = []
     regular_tasks = []
 
+    print(f"\n[Info] Starting transcription...")
+    print(f"[Info] Batch size: {args.batch_size}")
+    print(f"[Info] Language: {args.language}")
+
+    # Classify tasks by duration
     for task in tasks:
         try:
             duration = librosa.get_duration(path=task["audio_path"])
-            if duration > 20:  # > 20 seconds
-                long_audio_tasks.append(task)
-            else:
-                regular_tasks.append(task)
+            (long_audio_tasks if duration > 20 else regular_tasks).append(task)
         except Exception as e:
-            print(
-                f"[Warning] Could not check duration for {task.get('audio_path', 'unknown')}: {e}"
-            )
+            print(f"[Warning] Could not check duration for {task.get('audio_path', 'unknown')}: {e}")
             regular_tasks.append(task)
 
-    # Process regular tasks in batches
+    # Process regular tasks
     if regular_tasks:
-        print(f"\\n[Info] Processing {len(regular_tasks)} regular audio files...")
+        print(f"\n[Info] Processing {len(regular_tasks)} regular audio files...")
         results = processor.transcribe_batch(regular_tasks)
         for result in results:
             if "error" in result:
@@ -1027,11 +689,9 @@ def main():
             else:
                 success_count += 1
 
-    # Process long audio files individually
+    # Process long audio files
     if long_audio_tasks:
-        print(
-            f"\\n[Info] Processing {len(long_audio_tasks)} long audio files with chunking..."
-        )
+        print(f"\n[Info] Processing {len(long_audio_tasks)} long audio files with chunking...")
         for task in long_audio_tasks:
             try:
                 result = processor.transcribe_long_audio(
@@ -1041,10 +701,8 @@ def main():
                     chunk_duration=args.chunk_duration,
                 )
 
-                # Write output
                 if task.get("output_path"):
-                    output_dir = os.path.dirname(task["output_path"])
-                    os.makedirs(output_dir, exist_ok=True)
+                    os.makedirs(os.path.dirname(task["output_path"]), exist_ok=True)
                     with open(task["output_path"], "w", encoding="utf-8") as f:
                         f.write(result["text"])
                     print(f"[Info] Saved transcription to: {task['output_path']}")
@@ -1054,7 +712,7 @@ def main():
                 print(f"[Error] Failed to process {task['audio_path']}: {e}")
                 error_count += 1
 
-    print(f"\\n[Info] Transcription complete!")
+    print(f"\n[Info] Transcription complete!")
     print(f"[Info] Success: {success_count}/{len(tasks)}")
     print(f"[Info] Errors: {error_count}/{len(tasks)}")
 

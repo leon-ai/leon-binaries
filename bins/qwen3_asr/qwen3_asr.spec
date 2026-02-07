@@ -15,45 +15,10 @@ spec_root = os.getcwd()
 main_script = os.path.join(spec_root, RUN_MAIN_SCRIPT)
 
 # =============================================================================
-# COLLECT PYTORCH LIBRARIES
+# PYTORCH EXCLUSION
 # =============================================================================
-
-def collect_torch_libs():
-    """Collect PyTorch libraries needed for CUDA support."""
-    import torch
-    torch_lib = os.path.join(os.path.dirname(torch.__file__), 'lib')
-    torch_libs = []
-
-    if not os.path.exists(torch_lib):
-        print(f"[WARNING] PyTorch lib directory not found: {torch_lib}")
-        return torch_libs
-
-    print(f"[INFO] Scanning PyTorch libs: {torch_lib}")
-
-    seen = set()
-    critical_patterns = [
-        'libc10.so*',
-        'libc10_cuda.so*',
-        'libtorch.so*',
-        'libtorch_cpu.so*',
-        'libtorch_cuda.so*',
-        'libtorch_python.so*',
-        'libtorch_global_deps.so*',
-        'libshm.so*',
-    ]
-
-    for pattern in critical_patterns:
-        for lib_path in glob.glob(os.path.join(torch_lib, pattern)):
-            if os.path.isfile(lib_path):
-                lib_name = os.path.basename(lib_path)
-                if lib_name not in seen:
-                    seen.add(lib_name)
-                    torch_libs.append((lib_name, lib_path, 'BINARY'))
-                    print(f"[INFO] Including PyTorch lib: {lib_name}")
-
-    return torch_libs
-
-torch_binaries = collect_torch_libs()
+# PyTorch is excluded from the binary to reduce size.
+# Use --torch_path argument at runtime to load PyTorch from an external location.
 
 # =============================================================================
 # COLLECT PACKAGE DATA FILES
@@ -187,10 +152,15 @@ hiddenimports = [
     'jieba',
     'jieba.posseg',
     'jieba.analyse',
+    
+    # Dependencies needed by external PyTorch
+    'sympy',
+    'mpmath',  # sympy dependency
 ]
 
-# ONLY exclude NVIDIA packages
+# Exclude NVIDIA packages and PyTorch to reduce binary size
 excludes = [
+    # NVIDIA CUDA packages
     'nvidia.cuda_runtime',
     'nvidia.cublas',
     'nvidia.cudnn',
@@ -201,6 +171,28 @@ excludes = [
     'nvidia.cuda_nvrtc',
     'nvidia.nvtx',
     'nvidia.nccl',
+    
+    # PyTorch and related packages (load dynamically at runtime)
+    'torch',
+    'torch.distributed',
+    'torch.nn',
+    'torch.optim',
+    'torch.utils',
+    'torch.autograd',
+    'torch.cuda',
+    'torch.jit',
+    'torch.onnx',
+    'torch.quantization',
+    'torch.sparse',
+    'torch.futures',
+    'torch.fx',
+    'torch._C',
+    'torch._dynamo',
+    'torch._inductor',
+    'torch._functorch',
+    'torchvision',
+    'torchaudio',
+    'caffe2',
 ]
 
 a = Analysis(
@@ -219,48 +211,67 @@ a = Analysis(
 )
 
 # =============================================================================
-# FILTER BINARIES - Remove only NVIDIA CUDA libs
+# FILTER PYTHON MODULES - Remove ALL torch Python modules
 # =============================================================================
 
+print("[INFO] Filtering Python modules (a.pure)...")
+filtered_pure = []
+excluded_torch_modules = 0
+
+for name, src, typecode in a.pure:
+    # Exclude anything that starts with 'torch'
+    if name.startswith('torch') or name.startswith('caffe2'):
+        excluded_torch_modules += 1
+        print(f"[INFO] Excluding torch module: {name}")
+    else:
+        filtered_pure.append((name, src, typecode))
+
+print(f"[INFO] Excluded {excluded_torch_modules} torch Python modules")
+print(f"[INFO] Remaining Python modules: {len(filtered_pure)}")
+
+a.pure = filtered_pure
+
+# =============================================================================
+# FILTER BINARIES - Remove NVIDIA CUDA libs and PyTorch libs
+# =============================================================================
+
+print("[INFO] Filtering binary libraries...")
 filtered_binaries = []
-excluded_count = 0
+excluded_cuda_count = 0
+excluded_torch_count = 0
 
 for dest, src, typecode in a.binaries:
     binary_name = os.path.basename(src).lower()
     should_exclude = False
 
-    # Keep PyTorch libs
-    is_torch_lib = any(
-        os.path.basename(torch_lib[1]).lower() == binary_name
-        for torch_lib in torch_binaries
-    )
-
-    if is_torch_lib or 'libtorch' in binary_name or 'libc10' in binary_name or 'libshm' in binary_name:
-        if not any(os.path.basename(f[1]).lower() == binary_name for f in filtered_binaries):
-            filtered_binaries.append((dest, src, typecode))
-        continue
-
-    # Exclude ONLY NVIDIA CUDA libs
-    for pattern in excluded_binaries:
-        if pattern.lower() in binary_name:
-            should_exclude = True
-            excluded_count += 1
-            print(f"[INFO] Excluding NVIDIA lib: {binary_name}")
-            break
+    # Exclude PyTorch libraries (more comprehensive patterns)
+    # NOTE: libgomp is NOT excluded - it's needed by qwen_asr!
+    torch_patterns = [
+        'libtorch', 'libc10', 'libshm', 'torch_python', 'torch_cpu', 'torch_cuda',
+        'c10.so', 'c10_cuda', 'torch.so', '_C.', 'torch_global_deps',
+        'libnvfuser', 'libtorch_global', 'libcaffe2', 'libnvshmem',
+        'libtorch_python', 'libmkl',  # libgomp REMOVED - needed by qwen_asr
+    ]
+    
+    if any(pattern in binary_name for pattern in torch_patterns):
+        should_exclude = True
+        excluded_torch_count += 1
+        print(f"[INFO] Excluding PyTorch lib: {binary_name}")
+    
+    # Exclude NVIDIA CUDA libs
+    if not should_exclude:
+        for pattern in excluded_binaries:
+            if pattern.lower() in binary_name:
+                should_exclude = True
+                excluded_cuda_count += 1
+                print(f"[INFO] Excluding NVIDIA lib: {binary_name}")
+                break
 
     if not should_exclude:
         filtered_binaries.append((dest, src, typecode))
 
-# Add torch binaries
-existing_basenames = {os.path.basename(f[1]).lower() for f in filtered_binaries}
-
-for torch_lib in torch_binaries:
-    lib_basename = os.path.basename(torch_lib[1]).lower()
-    if lib_basename not in existing_basenames:
-        filtered_binaries.append(torch_lib)
-        print(f"[INFO] Adding PyTorch lib to bundle: {torch_lib[0]}")
-
-print(f"[INFO] Excluded {excluded_count} NVIDIA libraries")
+print(f"[INFO] Excluded {excluded_cuda_count} NVIDIA libraries")
+print(f"[INFO] Excluded {excluded_torch_count} PyTorch libraries")
 print(f"[INFO] Total binaries to bundle: {len(filtered_binaries)}")
 print(f"[INFO] Total data files: {len(all_data)}")
 
@@ -282,7 +293,7 @@ exe = EXE(
     name=PACKAGE_NAME,
     debug=False,
     bootloader_ignore_signals=False,
-    strip=True,
+    strip=False,
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
