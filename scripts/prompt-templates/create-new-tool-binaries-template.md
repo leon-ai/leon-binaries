@@ -46,6 +46,7 @@ You must create a new CLI binary for `{TOOL_NAME}`. {TOOL_DESCRIPTION}
 ```python
 __version__ = "1.0.0"
 ```
+- When using CUDA/NVIDIA, CUDA/NVIDIA libraries must be loaded dynamically from the path given in the CLI argument. You can check `run_qwen3_asr.py` to reproduce this code.
 - When using CPU, you must ensure to use multiple cores according to the number of available cores. You can look at the `chatterbox_onnx` as reference.
 
 ### PyInstaller and `.spec` File Requirements
@@ -120,6 +121,8 @@ If PyTorch is used, follow these requirements:
 
 - You must use `torch==2.9.0` version, and the `2.2.2` for macOS Intel.
 - You must install `llvmlite==0.43.0` for macOS Intel only. Because PyTorch has a strong dependency for this platform.
+- Implement the `--torch_path` CLI argument. Use `/home/louis/Workspace/leon/leon/bin/pytorch/torch/` as path for the tests.
+- Always load PyTorch from the path given in the CLI argument. You can check `run_qwen3_asr.py` to reproduce this code.
 
 ### Transformers Requirements
 
