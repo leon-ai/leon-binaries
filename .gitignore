@@ -9,6 +9,7 @@ test/coverage/
 **/tmp/*
 **/src/.venv/*
 logs/*
+scripts/out/*.md
 
 bins/chatterbox_onnx/output
 
