@@ -1,0 +1,11 @@
+[
+  {
+    "text": "Hello from Qwen3. I'm really happy to test this new feature!",
+    "target_language": "English",
+    "audio_path": "outputs/synthesize_output.wav",
+    "speaker_reference_path": "reference.wav",
+    "reference_text": "reference.txt",
+    "x_vector_only_mode": true,
+    "max_new_tokens": 256
+  }
+]

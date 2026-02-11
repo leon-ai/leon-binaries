@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "qwen3_tts"
+dynamic = ["version"]
+description = "The goal is to be able to do speech synthesize (text-to-speech) and voice cloning."
+requires-python = "==3.11.9"
+dependencies = [
+  "qwen-tts==0.1.1",
+  "numba==0.60.0",
+  "soundfile==0.13.1",
+  "transformers==4.57.3",
+  "torch==2.9.0; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+  "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "llvmlite==0.43.0; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+]
+
+[tool.uv]
+environments = [
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "sys_platform == 'linux' and platform_machine == 'aarch64'",
+  "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "sys_platform == 'win32' and platform_machine == 'AMD64'",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+only-include = ["run_qwen3_tts.py", "version.py"]
+
+[tool.hatch.version]
+path = "version.py"
+
+[dependency-groups]
+dev = [
+  "pyinstaller==6.18.0",
+]

@@ -1,0 +1,18 @@
+[
+  {
+    "design_text": "欢迎来到全新的AI World播客。我们将讨论最新的人工智能趋势。",
+    "design_language": "Chinese",
+    "design_instruct": "Male, warm, informative podcast, dialog.",
+    "texts": [
+      "今天我们来了解Leon AI。这是一个由Louis Grenard创建的开源AI助手。",
+      "我们非常兴奋能与您分享这个消息，因为它将极大地帮助开源生态系统。"
+    ],
+    "languages": ["Chinese", "Chinese"],
+    "output_paths": [
+      "outputs/design_batch_1_zh.wav",
+      "outputs/design_batch_2_zh.wav"
+    ],
+    "design_max_new_tokens": 128,
+    "max_new_tokens": 128
+  }
+]

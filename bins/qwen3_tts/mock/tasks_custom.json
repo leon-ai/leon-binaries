@@ -1,0 +1,10 @@
+[
+  {
+    "text": "Hello from a custom voice.",
+    "target_language": "English",
+    "speaker": "Ryan",
+    "instruct": "Bright and confident tone.",
+    "audio_path": "outputs/custom_output.wav",
+    "max_new_tokens": 256
+  }
+]

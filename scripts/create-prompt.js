@@ -22,7 +22,7 @@ const CLI_ARGUMENTS = `
   - \`--function\`
   - \`--device\`
   - \`--json_file\`. The data structure must be similar to the one from \`chatterbox_onnx\`.
-  - \`--resource_path\`. Download the resources to \`/home/louis/Downloads\` for the tests.
+  - \`--resource_path\`. Download the resources (model files from Hugging Face and maybe more...) to \`/home/louis/Downloads/${BINARY_NAME}_resources\` for the tests.
   - \`--nvidia_libs_path\`. Use \`/home/louis/Workspace/leon/leon/bin/nvidia/\` for the tests.
 `
 

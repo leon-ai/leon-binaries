@@ -1,0 +1,9 @@
+[
+  {
+    "text": "Hello from a designed voice.",
+    "target_language": "English",
+    "instruct": "Warm, calm, and friendly tone.",
+    "audio_path": "outputs/design_output.wav",
+    "max_new_tokens": 256
+  }
+]

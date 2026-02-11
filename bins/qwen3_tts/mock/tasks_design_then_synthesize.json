@@ -1,0 +1,18 @@
+[
+  {
+    "design_text": "Welcome to the new AI World podcast. We'll talk about the latest AI trends.",
+    "design_language": "English",
+    "design_instruct": "Male, warm, informative podcast, dialog.",
+    "texts": [
+      "Today we discover Leon AI. An open-source AI assistant created by Louis Grenard.",
+      "We are very excited to share this news with you since it'll greatly help the open-source ecosystem."
+    ],
+    "languages": ["English", "English"],
+    "output_paths": [
+      "outputs/design_batch_1.wav",
+      "outputs/design_batch_2.wav"
+    ],
+    "design_max_new_tokens": 128,
+    "max_new_tokens": 128
+  }
+]

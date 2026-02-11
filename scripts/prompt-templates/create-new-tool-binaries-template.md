@@ -30,7 +30,7 @@ You must create a new CLI binary for `{TOOL_NAME}`. {TOOL_DESCRIPTION}
   - Windows AMD64
 - You must search if ONNX variation exists. This is a priority before falling back to PyTorch. You can search on Hugging Face or on the web if any ONNX version exists. If yes, then you must use it and do not use PyTorch. It will help the binary tool to be more portable, lighter and faster at runtime.
 - You must use `uv`.
-- You must use Python 3.11.9.
+- You must use Python {PYTHON_VERSION}.
 - You must respect the following standard file structure:
   - `mock/` # Folder containing mock files to test
   - `version.py`
@@ -48,6 +48,7 @@ __version__ = "1.0.0"
 ```
 - When using CUDA/NVIDIA, CUDA/NVIDIA libraries must be loaded dynamically from the path given in the CLI argument. You can check `run_qwen3_asr.py` to reproduce this code.
 - When using CPU, you must ensure to use multiple cores according to the number of available cores. You can look at the `chatterbox_onnx` as reference.
+- Models/resources from Hugging Face, etc. must always been loaded from local. You must download the resources upfront.
 
 ### PyInstaller and `.spec` File Requirements
 
@@ -85,7 +86,7 @@ build-backend = "hatchling.build"
 name = "{BINARY_NAME}"
 dynamic = ["version"]
 description = "{CHOOSE_A_DESCRIPTION}"
-requires-python = "==3.11.9"
+requires-python = "=={PYTHON_VERSION}"
 dependencies = [ ... ]
 
 [tool.uv]
@@ -141,4 +142,4 @@ uv run run_{BINARY_NAME}.py
 ```bash
 pnpm run build {BINARY_NAME}
 ```
-- Once the binary is built, you must run it. If there is any error, you must fix it and try again. Use the binary name and the CLI arguments to run the binary. You may need to create mock files
+- Once the binary is built, you must run it. If there is any error, you must fix it and try again. Use the binary name and the CLI arguments to run the binary. You may need to create mock files.
