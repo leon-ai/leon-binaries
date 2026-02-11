@@ -42,6 +42,7 @@ uv run run_qwen3_tts.py \
   --device cuda \
   --torch_path /path/to/torch \
   --nvidia_libs_path /path/to/nvidia
+```
 
 ```bash
 uv run run_qwen3_tts.py \
@@ -61,7 +62,6 @@ uv run run_qwen3_tts.py \
   --device cuda \
   --torch_path /path/to/torch \
   --nvidia_libs_path /path/to/nvidia
-```
 ```
 
 ## JSON Task Format
