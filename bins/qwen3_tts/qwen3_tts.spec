@@ -40,6 +40,8 @@ def _filter_cuda_libraries(items):
 
 hiddenimports = [
     'backports.tarfile',
+    'mpmath',
+    'sympy',
     'qwen_tts',
     'qwen_tts.core',
     'qwen_tts.core.models',
