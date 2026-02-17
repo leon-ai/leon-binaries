@@ -41,6 +41,8 @@ def _filter_cuda_libraries(items):
 hiddenimports = [
     'backports.tarfile',
     'mpmath',
+    'onnxruntime.capi._pybind_state',
+    'onnxruntime.capi.onnxruntime_pybind11_state',
     'sympy',
     'qwen_tts',
     'qwen_tts.core',

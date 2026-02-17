@@ -61,7 +61,11 @@ async function main() {
 
   // Install dependencies using uv
   console.log('Installing dependencies with uv...')
-  run('uv', ['sync', '--frozen'], {
+  const uvSyncArgs = ['sync', '--frozen']
+  if (binName === 'qwen3_tts') {
+    uvSyncArgs.push('--reinstall-package', 'onnxruntime')
+  }
+  run('uv', uvSyncArgs, {
     cwd: binDir
   })
 
