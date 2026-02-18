@@ -179,9 +179,32 @@ def _resolve_path(path_value: str, base_dir: Path) -> str:
 
 
 def _read_text_arg(text_or_path: str) -> str:
-    path = Path(text_or_path)
-    if path.exists() and path.is_file():
-        return path.read_text(encoding="utf-8").strip()
+    if not text_or_path:
+        return text_or_path
+
+    if len(text_or_path) > 255:
+        return text_or_path
+
+    if any(ch in text_or_path for ch in ("\n", "\r")):
+        return text_or_path
+
+    looks_like_path = (
+        os.sep in text_or_path
+        or text_or_path.startswith(".")
+        or text_or_path.startswith("~")
+        or text_or_path.endswith((".txt", ".md", ".json"))
+    )
+
+    if not looks_like_path:
+        return text_or_path
+
+    try:
+        path = Path(text_or_path).expanduser()
+        if path.exists() and path.is_file():
+            return path.read_text(encoding="utf-8").strip()
+    except (OSError, ValueError):
+        return text_or_path
+
     return text_or_path
 
 
