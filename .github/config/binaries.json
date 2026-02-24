@@ -5,13 +5,13 @@
     "name": "leon",
     "branch": "develop"
   },
-  "binary_toolkit_mappings": {
+  "binary_tool_mappings": {
     "opencode": {
-      "toolkit_path": "bridges/toolkits/coding_development/toolkit.json",
+      "tool_path": "bridges/toolkits/coding_development/tools/opencode.tool.json",
       "tool_name": "opencode"
     },
     "yt-dlp": {
-      "toolkit_path": "bridges/toolkits/video_streaming/toolkit.json",
+      "tool_path": "bridges/toolkits/video_streaming/tools/ytdlp.tool.json",
       "tool_name": "ytdlp"
     }
   },

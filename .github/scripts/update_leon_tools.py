@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Leon Toolkit Updater
-Updates toolkit.json files in the leon-ai/leon repository when binaries are updated.
+Leon Tool Updater
+Updates tool JSON files in the leon-ai/leon repository when binaries are updated.
 """
 
 import datetime
@@ -20,14 +20,15 @@ def load_config() -> Dict:
         return json.load(f)
 
 
-def update_toolkit_json(toolkit_path: Path, tool_name: str, binary_name: str,
-                       version: str, github_token: str) -> bool:
+def update_tool_json(
+    tool_path: Path, tool_id: str, binary_name: str, version: str, github_token: str
+) -> bool:
     """
-    Update a toolkit.json file with new binary URLs from a GitHub release.
+    Update a tool JSON file with new binary URLs from a GitHub release.
 
     Args:
-        toolkit_path: Path to the toolkit.json file
-        tool_name: Name of the tool within the toolkit (e.g., "ytdlp")
+        tool_path: Path to the tool JSON file
+        tool_id: Tool identifier (e.g., "ytdlp")
         binary_name: Name of the binary (e.g., "yt-dlp")
         version: New binary version
         github_token: GitHub token for API access
@@ -35,24 +36,25 @@ def update_toolkit_json(toolkit_path: Path, tool_name: str, binary_name: str,
     Returns:
         True if file was modified, False otherwise
     """
-    with open(toolkit_path, 'r') as f:
-        toolkit_data = json.load(f)
+    with open(tool_path, "r") as f:
+        tool_data = json.load(f)
 
-    # Check if tool exists
-    if tool_name not in toolkit_data.get('tools', {}):
-        print(f"  ⚠️  Tool '{tool_name}' not found in toolkit")
+    # Check tool_id
+    if tool_data.get("tool_id") != tool_id:
+        print(
+            f"  ⚠️  Tool ID mismatch: expected '{tool_id}', found '{tool_data.get('tool_id')}'"
+        )
         return False
 
-    tool_config = toolkit_data['tools'][tool_name]
-    binaries = tool_config.get('binaries', {})
+    binaries = tool_data.get("binaries", {})
 
     if not binaries:
-        print(f"  ⚠️  No binaries found for tool '{tool_name}'")
+        print(f"  ⚠️  No binaries found for tool '{tool_id}'")
         return False
 
     # Fetch release assets from GitHub API
     release_url = f"https://api.github.com/repos/leon-ai/leon-binaries/releases/tags/{binary_name}-v{version}"
-    headers = {'Authorization': f'token {github_token}'} if github_token else {}
+    headers = {"Authorization": f"token {github_token}"} if github_token else {}
 
     try:
         response = requests.get(release_url, headers=headers, timeout=10)
@@ -62,7 +64,7 @@ def update_toolkit_json(toolkit_path: Path, tool_name: str, binary_name: str,
         return False
 
     release_data = response.json()
-    assets = release_data.get('assets', [])
+    assets = release_data.get("assets", [])
 
     if not assets:
         print(f"  ⚠️  No assets found in release {binary_name}-v{version}")
@@ -73,8 +75,8 @@ def update_toolkit_json(toolkit_path: Path, tool_name: str, binary_name: str,
     new_urls = {}
 
     for asset in assets:
-        asset_name = asset['name']
-        asset_url = asset['browser_download_url']
+        asset_name = asset["name"]
+        asset_url = asset["browser_download_url"]
 
         # Parse asset name to extract OS and ARCH
         # Format: {binary_name}_{version}-{os}-{arch}{ext}
@@ -84,16 +86,16 @@ def update_toolkit_json(toolkit_path: Path, tool_name: str, binary_name: str,
         name_clean = asset_name.replace(f"{binary_name}_{version}-", "", 1)
 
         # Extract OS (first part) and ARCH (second part, before extension)
-        parts = name_clean.split('-')
+        parts = name_clean.split("-")
 
         if len(parts) < 2:
             continue
 
         os_name = parts[0].lower()  # linux, macosx, win
-        arch = parts[1].split('.')[0]  # x86_64, aarch64, amd64, arm64
+        arch = parts[1].split(".")[0]  # x86_64, aarch64, amd64, arm64
 
-        # Try to match platform keys in the toolkit
-        # Toolkit keys like: linux-x86_64, macosx-arm64, win-amd64, etc.
+        # Try to match platform keys in the tool file
+        # Tool keys like: linux-x86_64, macosx-arm64, win-amd64, etc.
         for platform_key in binaries.keys():
             if os_name in platform_key and arch in platform_key:
                 new_urls[platform_key] = asset_url
@@ -102,15 +104,16 @@ def update_toolkit_json(toolkit_path: Path, tool_name: str, binary_name: str,
             # Fuzzy matching for platform keys that might have different naming
             for platform_key in binaries.keys():
                 # Check for OS match
-                if (os_name.startswith(platform_key.lower()) or
-                    platform_key.lower().startswith(os_name)):
+                if os_name.startswith(
+                    platform_key.lower()
+                ) or platform_key.lower().startswith(os_name):
                     # Check for arch match
                     if arch in platform_key or platform_key.lower().endswith(arch):
                         new_urls[platform_key] = asset_url
                         print(f"       Fuzzy matched {asset_name} → {platform_key}")
                         break
 
-    # Update toolkit URLs
+    # Update tool URLs
     if not new_urls:
         print(f"  ⚠️  No matching platform keys found for {len(assets)} assets")
         return False
@@ -134,20 +137,20 @@ def update_toolkit_json(toolkit_path: Path, tool_name: str, binary_name: str,
 
     if modified:
         # Write updated JSON back
-        with open(toolkit_path, 'w') as f:
-            json.dump(toolkit_data, f, indent=2)
-        print(f"  ✅ Updated toolkit: {toolkit_path}")
+        with open(tool_path, "w") as f:
+            json.dump(tool_data, f, indent=2)
+        print(f"  ✅ Updated tool: {tool_path}")
         return True
     else:
-        print(f"  ℹ️  No changes needed for {tool_name}")
+        print(f"  ℹ️  No changes needed for {tool_id}")
         return False
 
 
 def clone_leon_repo(leon_repo_config: Dict, token: str, clone_dir: Path) -> Path:
     """Clone or update the Leon repository."""
-    owner = leon_repo_config['owner']
-    name = leon_repo_config['name']
-    branch = leon_repo_config.get('branch', 'develop')
+    owner = leon_repo_config["owner"]
+    name = leon_repo_config["name"]
+    branch = leon_repo_config.get("branch", "develop")
 
     repo_url = f"https://x-access-token:{token}@github.com/{owner}/{name}.git"
     clone_path = clone_dir / name
@@ -155,17 +158,31 @@ def clone_leon_repo(leon_repo_config: Dict, token: str, clone_dir: Path) -> Path
     # Clone if it doesn't exist, otherwise pull
     if clone_path.exists():
         print(f"  🔄 Updating existing Leon repository...")
-        subprocess.run(['git', '-C', str(clone_path), 'fetch', 'origin', str(branch)],
-                      check=True)
-        subprocess.run(['git', '-C', str(clone_path), 'checkout', str(branch)],
-                      check=True)
-        subprocess.run(['git', '-C', str(clone_path), 'pull', 'origin', str(branch)],
-                      check=True)
+        subprocess.run(
+            ["git", "-C", str(clone_path), "fetch", "origin", str(branch)], check=True
+        )
+        subprocess.run(
+            ["git", "-C", str(clone_path), "checkout", str(branch)], check=True
+        )
+        subprocess.run(
+            ["git", "-C", str(clone_path), "pull", "origin", str(branch)], check=True
+        )
     else:
         print(f"  📥 Cloning Leon repository...")
         clone_dir.mkdir(parents=True, exist_ok=True)
-        subprocess.run(['git', 'clone', '--depth', '1', '-b', str(branch),
-                        repo_url, str(clone_path)], check=True)
+        subprocess.run(
+            [
+                "git",
+                "clone",
+                "--depth",
+                "1",
+                "-b",
+                str(branch),
+                repo_url,
+                str(clone_path),
+            ],
+            check=True,
+        )
 
     return clone_path
 
@@ -183,48 +200,60 @@ def commit_and_push_changes(repo_path: Path, updates: List[str]) -> bool:
     """
     try:
         # Configure git with custom name/email or default to github-actions[bot]
-        git_name = os.environ.get('GIT_USER_NAME', 'github-actions[bot]')
-        git_email = os.environ.get('GIT_USER_EMAIL', 'github-actions[bot]@users.noreply.github.com')
+        git_name = os.environ.get("GIT_USER_NAME", "github-actions[bot]")
+        git_email = os.environ.get(
+            "GIT_USER_EMAIL", "github-actions[bot]@users.noreply.github.com"
+        )
 
-        subprocess.run(['git', '-C', str(repo_path), 'config',
-                       'user.name', git_name], check=True)
-        subprocess.run(['git', '-C', str(repo_path), 'config',
-                       'user.email', git_email], check=True)
+        subprocess.run(
+            ["git", "-C", str(repo_path), "config", "user.name", git_name], check=True
+        )
+        subprocess.run(
+            ["git", "-C", str(repo_path), "config", "user.email", git_email], check=True
+        )
 
         # Check for changes
-        result = subprocess.run(['git', '-C', str(repo_path), 'status',
-                               '--porcelain'], capture_output=True, text=True)
+        result = subprocess.run(
+            ["git", "-C", str(repo_path), "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+        )
 
         if not result.stdout.strip():
             print("  ℹ️  No changes to commit")
             return False
 
         # Create a unique branch name
-        timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+        timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         branch_name = f"chore/update-binaries-{timestamp}"
 
         print(f"  🌿 Creating branch: {branch_name}")
 
         # Create and checkout new branch
-        subprocess.run(['git', '-C', str(repo_path), 'checkout', '-b', branch_name],
-                      check=True)
+        subprocess.run(
+            ["git", "-C", str(repo_path), "checkout", "-b", branch_name], check=True
+        )
 
         # Add all changes
-        subprocess.run(['git', '-C', str(repo_path), 'add', '.'], check=True)
+        subprocess.run(["git", "-C", str(repo_path), "add", "."], check=True)
 
         # Commit with descriptive message
-        update_summary = ', '.join(updates[:3])
+        update_summary = ", ".join(updates[:3])
         if len(updates) > 3:
-            update_summary += f' and {len(updates) - 3} more'
+            update_summary += f" and {len(updates) - 3} more"
 
-        commit_message = f"chore: update toolkit binary URLs ({update_summary})"
+        commit_message = f"chore: update tool binary URLs ({update_summary})"
 
-        subprocess.run(['git', '-C', str(repo_path), 'commit', '-m', commit_message],
-                      check=True)
+        subprocess.run(
+            ["git", "-C", str(repo_path), "commit", "-m", commit_message], check=True
+        )
 
         # Push branch to origin
-        result = subprocess.run(['git', '-C', str(repo_path), 'push', '-u', 'origin', branch_name],
-                              capture_output=True, text=True)
+        result = subprocess.run(
+            ["git", "-C", str(repo_path), "push", "-u", "origin", branch_name],
+            capture_output=True,
+            text=True,
+        )
 
         if result.returncode == 0:
             print(f"  ✅ Successfully pushed branch: {branch_name}")
@@ -244,12 +273,12 @@ def commit_and_push_changes(repo_path: Path, updates: List[str]) -> bool:
 
 def main():
     """Main execution function."""
-    print("\n" + "="*60)
-    print("🔧 Leon Toolkit Updater")
-    print("="*60 + "\n")
+    print("\n" + "=" * 60)
+    print("🔧 Leon Tool Updater")
+    print("=" * 60 + "\n")
 
     # Get GitHub token
-    leon_token = os.environ.get('LEON_REPO_TOKEN')
+    leon_token = os.environ.get("LEON_REPO_TOKEN")
     if not leon_token:
         print("❌ LEON_REPO_TOKEN environment variable not set")
         return
@@ -257,14 +286,14 @@ def main():
     # Load configuration
     config = load_config()
 
-    # Check if there's any binary_toolkit_mappings configured
-    toolkit_mappings = config.get('binary_toolkit_mappings', {})
-    if not toolkit_mappings:
-        print("ℹ️  No toolkit mappings configured, skipping Leon repository update")
+    # Check if there's any binary_tool_mappings configured
+    tool_mappings = config.get("binary_tool_mappings", {})
+    if not tool_mappings:
+        print("ℹ️  No tool mappings configured, skipping Leon repository update")
         return
 
     # Get binary versions from the update script
-    workspace = Path(os.environ.get('GITHUB_WORKSPACE', '.'))
+    workspace = Path(os.environ.get("GITHUB_WORKSPACE", "."))
     versions_file = workspace / ".github" / "data" / "binary_versions.json"
 
     if not versions_file.exists():
@@ -274,12 +303,14 @@ def main():
     with open(versions_file) as f:
         versions = json.load(f)
 
-    leon_repo_config = config.get('leon_repo', {})
+    leon_repo_config = config.get("leon_repo", {})
     if not leon_repo_config:
         print("⚠️  Leon repository configuration not found")
         return
 
-    print(f"📦 Checking for toolkit updates in {leon_repo_config['owner']}/{leon_repo_config['name']}")
+    print(
+        f"📦 Checking for tool updates in {leon_repo_config['owner']}/{leon_repo_config['name']}"
+    )
 
     # Clone/update Leon repository
     clone_dir = Path("/tmp") / "leon_repos"
@@ -287,40 +318,40 @@ def main():
 
     updates_made = []
 
-    # Process each binary that has a toolkit mapping
-    for binary_name, mapping in toolkit_mappings.items():
+    # Process each binary that has a tool mapping
+    for binary_name, mapping in tool_mappings.items():
         if binary_name not in versions:
             print(f"  ℹ️  Skipping {binary_name} (not in versions)")
             continue
 
         version = versions[binary_name]
-        toolkit_rel_path = mapping['toolkit_path']
-        tool_name = mapping['tool_name']
+        tool_rel_path = mapping["tool_path"]
+        tool_id = mapping["tool_name"]
 
-        toolkit_path = leon_repo_path / toolkit_rel_path
+        tool_path = leon_repo_path / tool_rel_path
 
-        if not toolkit_path.exists():
-            print(f"  ⚠️  Toolkit file not found: {toolkit_rel_path}")
+        if not tool_path.exists():
+            print(f"  ⚠️  Tool file not found: {tool_rel_path}")
             continue
 
         print(f"\n📝 Processing {binary_name} (v{version})...")
-        print(f"     Toolkit: {toolkit_rel_path}")
-        print(f"     Tool: {tool_name}")
+        print(f"     Tool file: {tool_rel_path}")
+        print(f"     Tool ID: {tool_id}")
 
-        if update_toolkit_json(toolkit_path, tool_name, binary_name, version, leon_token):
+        if update_tool_json(tool_path, tool_id, binary_name, version, leon_token):
             updates_made.append(f"{binary_name} → v{version}")
 
     # Commit and push if there were changes
     if updates_made:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"📤 Committing {len(updates_made)} update(s) to Leon repository...")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         commit_and_push_changes(leon_repo_path, updates_made)
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print(f"✅ Updated: {len(updates_made)} | ❌ Errors: 0")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
 
 if __name__ == "__main__":
