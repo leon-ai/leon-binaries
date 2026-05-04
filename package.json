@@ -4,7 +4,6 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "node scripts/build.js",
-    "create:prompt": "node scripts/create-prompt.js"
+    "build": "node scripts/build.js"
   }
 }
